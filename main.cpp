@@ -9,6 +9,8 @@ using namespace cv;
 VideoCapture TheVideoCapturer;
 Mat bgrMap;
 
+bool test = false;
+
 double alpha; /**< Simple contrast control */
 int beta; /**< Simple brightness control*/
 
@@ -29,23 +31,29 @@ Mat procesar(Mat image) {
 }
 
 Mat barrel(Mat imagen, double Cx, double Cy, double kx, double ky) {
-    Mat mapx, mapy, dst;
+    Mat mapx, mapy, dst, ndst;
 
     dst.create(imagen.size(), imagen.type());
+    ndst.create(imagen.size(), imagen.type());
     mapx.create(imagen.size(), CV_32FC1);
     mapy.create(imagen.size(), CV_32FC1);
 
-    int w = imagen.rows;
-    int h = imagen.cols;
+    int h = imagen.rows;
+    int w = imagen.cols;
 
     for (int y = 0; y < h; y++) {
+        int ty = y - Cy;
         for (int x = 0; x < w; x++) {
+            int tx = x - Cx;
+            int rt = tx * tx + ty*ty;
             mapx.at<float>(y, x) = Cx + (x - Cx)*(1 + kx * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
-            mapx.at<float>(y, x) = Cy + (y - Cy)*(1 + ky * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
+            mapy.at<float>(y, x) = Cy + (y - Cy)*(1 + ky * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
+            //mapx.at<float>(y, x) =(float)(tx*(1+kx*rt)+Cx);
+            //mapy.at<float>(y, x) = (float)(ty*(1+ky*rt)+Cy);
         }
     }
-    remap(imagen, dst, mapx, mapy, CV_INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
-    return imagen;
+    remap(imagen, dst, mapx, mapy, INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
+    return ndst;
 }
 
 Mat barrel_pincusion_dist(Mat imagen, double Cx, double Cy, double kx, double ky) { //No funciona, usado como base
@@ -118,7 +126,27 @@ Mat barrel_pincusion_dist(Mat imagen, double Cx, double Cy, double kx, double ky
 
 }
 
-Mat invertir(Mat image) {
+Mat invertir(Mat imagen) {
+    Mat mapx, mapy, dst;
+
+    dst.create(imagen.size(), imagen.type());
+    mapx.create(imagen.size(), CV_32FC1);
+    mapy.create(imagen.size(), CV_32FC1);
+
+    int h = imagen.rows;
+    int w = imagen.cols;
+
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            mapx.at<float>(y, x) = imagen.cols - x;
+            mapy.at<float>(y, x) = imagen.rows - y;
+        }
+    }
+    remap(imagen, dst, mapx, mapy, CV_INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
+    return dst;
+}
+
+Mat negativo(Mat image) {
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
 
     for (int y = 0; y < image.rows; y++) {
@@ -217,11 +245,13 @@ int main(int argc, char *argv[]) {
                 NuevaImagen = cambiarEscalaColores(procesar(bgrMap));
                 break;
             case 4:
-                NuevaImagen = invertir(procesar(bgrMap));
+                NuevaImagen = negativo(procesar(bgrMap));
                 // NuevaImagen = barril(procesar(bgrMap));
                 break;
             case 5:
-                NuevaImagen = barrel(procesar(bgrMap), 1, 1, 1, 1);  
+                if (!test) {
+                    NuevaImagen = barrel(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, -2, -2);
+                }
                 break;
             default:
                 NuevaImagen = procesar(bgrMap);
