@@ -14,20 +14,6 @@ int beta; /**< Simple brightness control*/
 
 int filtro; // 0-Nornal, 1- Filtro de grises, 2-Escala de colores,3-Filtro alienacion, 4- Filtro Negativo
 
-float getRadialX(float x, float y, float cx, float cy, float k) {
-    x = (x*bgrMap.cols+bgrMap.channels());
-    y = (y*bgrMap.rows+bgrMap.channels());
-    float res = x + ((x - cx) * k * ((x - cx)*(x - cx)+(y - cy)*(y - cy)));
-    return res;
-}
-
-float getRadialY(float x, float y, float cx, float cy, float k) {
-    x = (x*bgrMap.cols+bgrMap.channels());
-    y = (y*bgrMap.rows+bgrMap.channels());
-    float res = y + ((y - cy) * k * ((x - cx)*(x - cx)+(y - cy)*(y - cy)));
-    return res;
-}
-
 Mat procesar(Mat image) {
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
 
@@ -42,15 +28,94 @@ Mat procesar(Mat image) {
     return nuevaImagen;
 }
 
-Mat barril(Mat image) {
-    Mat nuevaImagen = Mat::zeros(image.size(), image.type());
-    for (int y = 0; y < image.rows; y++) {
-        for (int x = 0; x < image.cols; x++) {
-                nuevaImagen.at<Vec3b>(getRadialX(x, y, 1, 1, 1), getRadialY(x, y, 1, 1,1)) = image.at<Vec3b>(y, x) ;
+Mat barrel(Mat imagen, double Cx, double Cy, double kx, double ky) {
+    Mat mapx, mapy, dst;
+
+    dst.create(imagen.size(), imagen.type());
+    mapx.create(imagen.size(), CV_32FC1);
+    mapy.create(imagen.size(), CV_32FC1);
+
+    int w = imagen.rows;
+    int h = imagen.cols;
+
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            mapx.at<float>(y, x) = Cx + (x - Cx)*(1 + kx * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
+            mapx.at<float>(y, x) = Cy + (y - Cy)*(1 + ky * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
+        }
+    }
+    remap(imagen, dst, mapx, mapy, CV_INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
+    return imagen;
+}
+
+Mat barrel_pincusion_dist(Mat imagen, double Cx, double Cy, double kx, double ky) { //No funciona, usado como base
+    IplImage img = imagen;
+    //cvCreateImage(Tamaño, profundidad bit,channels)
+    IplImage* mapx = cvCreateImage(cvGetSize(&img), IPL_DEPTH_32F, 1); //Why un channel??
+    IplImage* mapy = cvCreateImage(cvGetSize(&img), IPL_DEPTH_32F, 1);
+
+    int w = img.width;
+    int h = img.height;
+
+    //std::cout << "Fallo al convertir" << std::endl;
+
+    float* pbuf = (float*) mapx->imageData;
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            float u = Cx + (x - Cx)*(1 + kx * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
+            *pbuf = u;
+            ++pbuf;
+        }
+    }
+    //std::cout << "Fallo en el primer bucle" << std::endl;
+
+    pbuf = (float*) mapy->imageData;
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            *pbuf = Cy + (y - Cy)*(1 + ky * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
+            ++pbuf;
         }
     }
 
-    return nuevaImagen;
+    // std::cout << "Fallo en el segundo bucle" << std::endl;
+
+    /*float* pbuf = (float*)mapx->imageData;
+    for (int y = 0; y < h; y++)
+    {
+        int ty= y-Cy;
+        for (int x = 0; x < w; x++)
+        {
+            int tx= x-Cx;
+            int rt= tx*tx+ty*ty;
+
+     *pbuf = (float)(tx*(1+kx*rt)+Cx);
+            ++pbuf;
+        }
+    }
+
+    pbuf = (float*)mapy->imageData;
+    for (int y = 0;y < h; y++)
+    {
+        int ty= y-Cy;
+        for (int x = 0; x < w; x++) 
+        {
+            int tx= x-Cx;
+            int rt= tx*tx+ty*ty;
+
+     *pbuf = (float)(ty*(1+ky*rt)+Cy);
+            ++pbuf;
+        }
+    }*/
+
+    IplImage* temp = cvCloneImage(&img);
+    cvRemap(temp, &img, mapx, mapy);
+    cvReleaseImage(&temp);
+    cvReleaseImage(&mapx);
+    cvReleaseImage(&mapy);
+
+    Mat image = cvarrToMat(&img);
+    return image;
+
 }
 
 Mat invertir(Mat image) {
@@ -110,6 +175,7 @@ int main(int argc, char *argv[]) {
     filtro = 0;
 
     Mat NuevaImagen;
+    IplImage img;
 
     char key = 0;
     int numSnapshot = 0;
@@ -147,12 +213,15 @@ int main(int argc, char *argv[]) {
                 NuevaImagen = colorReduce2(procesar(bgrMap));
                 //colorReduce(NuevaImagen);
                 break;
-            case 3:              
+            case 3:
                 NuevaImagen = cambiarEscalaColores(procesar(bgrMap));
                 break;
             case 4:
-                //NuevaImagen = invertir(procesar(bgrMap));
-                NuevaImagen = barril(procesar(bgrMap));
+                NuevaImagen = invertir(procesar(bgrMap));
+                // NuevaImagen = barril(procesar(bgrMap));
+                break;
+            case 5:
+                NuevaImagen = barrel(procesar(bgrMap), 1, 1, 1, 1);  
                 break;
             default:
                 NuevaImagen = procesar(bgrMap);
@@ -217,6 +286,15 @@ int main(int argc, char *argv[]) {
                     filtro = 4;
                 } else {
                     std::cout << "Negativo Desactivada" << std::endl;
+                    filtro = 0;
+                }
+                break;
+            case 111://o
+                if (filtro != 5) {
+                    std::cout << "Barril Activado" << std::endl;
+                    filtro = 5;
+                } else {
+                    std::cout << "Barril Desactivado" << std::endl;
                     filtro = 0;
                 }
                 break;
