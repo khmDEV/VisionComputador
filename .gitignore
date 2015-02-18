@@ -32,3 +32,7 @@ CMakeFiles/
 *.png
 *.cmake
 *.txt
+
+Makefile
+*~
+main
