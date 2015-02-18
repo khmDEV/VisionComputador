@@ -3,20 +3,23 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <string>
 #include <sstream>
-
+#include "opencv2/imgproc/imgproc_c.h"
+#include "opencv2/imgproc/imgproc.hpp"
 using namespace cv;
+
 
 VideoCapture TheVideoCapturer;
 Mat bgrMap;
 
 bool test = true;
-
+bool noise=false;
 double alpha; /**< Simple contrast control */
 int beta; /**< Simple brightness control*/
-float cof = 0.2;
-
+float cof = 1;
+float correctorX=1.33,correctorY=1.33;
 int filtro; // 0-Nornal, 1- Filtro de grises, 2-Escala de colores,3-Filtro alienacion, 4- Filtro Negativo
-
+Mat removeNoise(Mat);
+Mat filtradoDeRuidoInutil(Mat);
 Mat contrasteRGB(Mat image) {
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
 
@@ -50,6 +53,10 @@ Mat contrasteHSI(Mat image) {
 }
 
 Mat procesar(Mat image) {
+    if(noise){   
+	image=removeNoise(image);
+	//image=filtradoDeRuidoInutil(image);
+    }
     if (test) {
         return contrasteRGB(image);
     } else {
@@ -58,29 +65,23 @@ Mat procesar(Mat image) {
 }
 
 Mat barrel(Mat imagen, double Cx, double Cy, double kx, double ky) {
-    Mat mapx, mapy, dst, ndst;
-
-    dst.create(imagen.size(), imagen.type());
-    ndst.create(imagen.size(), imagen.type());
-    mapx.create(imagen.size(), CV_32FC1);
-    mapy.create(imagen.size(), CV_32FC1);
-
+    cv::Mat dst = cv::Mat::zeros(imagen.size(), imagen.type());
+    cv::Mat mapx = cv::Mat::zeros(imagen.size(), CV_32FC1);
+    cv::Mat mapy = cv::Mat::zeros(imagen.size(), CV_32FC1);
     int h = imagen.rows;
     int w = imagen.cols;
-
+    double rTot=sqrt(Cx*Cx+Cy*Cy);
     for (int y = 0; y < h; y++) {
-        // int ty = y - Cy;
+        int ty = y - Cy;
         for (int x = 0; x < w; x++) {
-            // int tx = x - Cx;
-            // int rt = tx * tx + ty*ty;
-            mapx.at<float>(y, x) = Cx + (x - Cx)*(1 + kx * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
-            mapy.at<float>(y, x) = Cy + (y - Cy)*(1 + ky * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
-            //mapx.at<float>(y, x) =(float)(tx*(1+kx*rt)+Cx);
-            //mapy.at<float>(y, x) = (float)(ty*(1+ky*rt)+Cy);
+            int tx = x - Cx;
+            float rt = sqrt(tx * tx + ty*ty)/rTot;
+            mapx.at<float>(y, x) = (float)(tx*(1+kx*rt*rt)*correctorX+Cx);
+            mapy.at<float>(y, x) = (float)(ty*(1+ky*rt*rt)*correctorY+Cy);
         }
     }
-    remap(imagen, ndst, mapx, mapy, INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
-    return ndst;
+    remap(imagen, dst, mapx, mapy, INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
+    return dst;
 }
 
 Mat barrel_pincusion_dist(Mat imagen, double Cx, double Cy, double kx, double ky) { //No funciona, usado como base
@@ -240,7 +241,54 @@ bool R2(float Y, float Cr, float Cb) {
 bool R3(float H, float S, float V) {
     return (H < 25) || (H > 230);
 }
+Mat old;bool f=true;
+Mat filtradoDeRuidoInutil(Mat image) {
 
+	if(f){f=false;old=image.clone();return image;}
+	Mat dst=Mat::zeros(image.size(), image.type());
+	for (int y = 0; y < image.rows; y++) {
+        	for (int x = 0; x < image.cols; x++) {
+        		int dif=abs(image.at<Vec3b>(y,x)[0]-old.at<Vec3b>(y,x)[0])+abs(image.at<Vec3b>(y,x)[1]-old.at<Vec3b>(y,x)[1])+abs(image.at<Vec3b>(y,x)[2]-old.at<Vec3b>(y,x)[2]);
+        		if(dif<30){
+        			dst.at<Vec3b>(y,x)[0]=image.at<Vec3b>(y,x)[0];dst.at<Vec3b>(y,x)[1]=image.at<Vec3b>(y,x)[1];dst.at<Vec3b>(y,x)[2]=image.at<Vec3b>(y,x)[2];
+        		}
+        	}
+	}
+	old=image.clone();
+	return dst;
+}
+Mat removeNoise(Mat src) {
+	Mat dst = src.clone();
+	int v[3][3]={{1,2,1},{2,4,2},{1,2,1}};
+//int v[5][5]={{1,4,6,4,1},{4,16,24,16,4},{6,24,36,24,6},{4,16,24,16,4},{1,4,6,4,1}};
+	int m=0;size_t r=sizeof(*v)/sizeof(*v[0]), c=r;
+ 	for (int i = 0; i <r; i++) {
+        	for (int j = 0; j < c; j++) {
+ 		 	m+=v[i][j];
+		}
+	}
+
+	int cr=r/2,cc=c/2;
+//printf("%i\n",cr);
+
+ 	for (int i = cr; i < src.rows-cr; i++) {
+        	for (int j = cc; j < src.cols-cc; j++) {
+        		int tr=0,tg=0,tb=0;
+        		for (int a = 0; a <r; a++) {
+        			for (int b = 0; b < c; b++) {
+        				int coe=v[a][b];
+        				tr+=src.at<Vec3b>(i+a-cr,j+b-cc)[0]*coe;
+        				tg+=src.at<Vec3b>(i+a-cr,j+b-cc)[1]*coe;
+        				tb+=src.at<Vec3b>(i+a-cr,j+b-cc)[2]*coe;
+				}
+			}
+			dst.at<Vec3b>(i,j)[0]=tr/m;
+			dst.at<Vec3b>(i,j)[1]=tg/m;
+			dst.at<Vec3b>(i,j)[2]=tb/m;
+		}
+	}
+	return dst;
+}
 Mat alien3(Mat const &src) {
     // allocate the result matrix
     Mat dst = src.clone();
@@ -369,7 +417,24 @@ Mat colorReduce2(Mat image, int div = 64) { //Version Aron, funciona en camara, 
     return nuevaImagen;
 
 }
-
+void calcCorrector(Mat m){
+	cof = cof>255?255:cof;cof = cof<-0.25?-0.25:cof;
+	int Cx=m.cols/2,Cy=m.rows/2;
+        double rTot=sqrt(Cx*Cx+Cy*Cy);
+	float rtt=Cx/rTot;
+	float ca,cb;
+	if((cof)<(cof*rtt*rtt)){
+		correctorX=1/(1+cof);
+	}else{
+		correctorX=1/(1+cof*rtt*rtt);
+	}
+	rtt=Cy/rTot;
+	if((cof)<(cof*rtt*rtt)){
+		correctorY=1/(1+cof);
+	}else{
+		correctorY=1/(1+cof*rtt*rtt);
+	}
+}
 int main(int argc, char *argv[]) {
     alpha = 1;
     beta = 0;
@@ -448,7 +513,7 @@ int main(int argc, char *argv[]) {
                     }
                     std::cout << "Contraste - (" << alpha << ")" << std::endl;
                 } else {
-                    cof = cof / 10;
+                    cof = abs(cof) / 2<0.01?cof:cof / 2;calcCorrector(bgrMap);printf("%f\n",cof);
                 }
                 break;
 
@@ -459,7 +524,7 @@ int main(int argc, char *argv[]) {
                     }
                     std::cout << "Contraste + (" << alpha << ")" << std::endl;
                 } else {
-                    cof = cof * 10;
+                    cof = cof * 2;calcCorrector(bgrMap);printf("%f\n",cof);
                 }
                 break;
             case 118: //v
@@ -501,7 +566,7 @@ int main(int argc, char *argv[]) {
                 break;
             case 111://o
                 if (filtro != 5) {
-                    std::cout << "Barril Activado" << std::endl;
+                    std::cout << "Barril Activado" << std::endl;calcCorrector(bgrMap);
                     filtro = 5;
                 } else {
                     std::cout << "Barril Desactivado" << std::endl;
@@ -509,15 +574,27 @@ int main(int argc, char *argv[]) {
                 }
                 break;
             case 110://n
-                if (test) {
-                    std::cout << "Modo contraste cambiado" << std::endl;
-                    test = false;
-                    cof=cof*-1;
-                    std::cout << cof << std::endl;
+                if(filtro==5){
+                	cof=cof>0?-0.25:1;calcCorrector(bgrMap);
+                }else{
+			if (test) {
+                	    std::cout << "Modo contraste cambiado" << std::endl;
+                	    test = false;
+                	    std::cout << cof << std::endl;
+                	} else {
+                	    std::cout << "Modo contraste cambiado" << std::endl;
+                	    test = true;
+                	}
+		}
+	   case 109://m
+                if (noise) {
+                    std::cout << "Modo eliminacion de ruido desactivado" << std::endl;
+                    noise = false;
                 } else {
-                    std::cout << "Modo contraste cambiado" << std::endl;
-                    test = true;
+                    std::cout << "Modo eliminacion de ruido activado" << std::endl;
+                    noise = true;
                 }
+                break;
                 break;
         }
 
