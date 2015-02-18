@@ -9,14 +9,15 @@ using namespace cv;
 VideoCapture TheVideoCapturer;
 Mat bgrMap;
 
-bool test = false;
+bool test = true;
 
 double alpha; /**< Simple contrast control */
 int beta; /**< Simple brightness control*/
+float cof = 0.2;
 
 int filtro; // 0-Nornal, 1- Filtro de grises, 2-Escala de colores,3-Filtro alienacion, 4- Filtro Negativo
 
-Mat procesar(Mat image) {
+Mat contrasteRGB(Mat image) {
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
 
     for (int y = 0; y < image.rows; y++) {
@@ -28,6 +29,32 @@ Mat procesar(Mat image) {
         }
     }
     return nuevaImagen;
+}
+
+Mat contrasteHSI(Mat image) {
+    Mat newimage;
+    cvtColor(image, newimage, CV_BGR2HSV);
+
+    Mat nuevaImagen = Mat::zeros(image.size(), newimage.type());
+
+    for (int y = 0; y < newimage.rows; y++) {
+        for (int x = 0; x < newimage.cols; x++) {
+            nuevaImagen.at<Vec3b>(y, x)[2] =
+                    saturate_cast<uchar>(alpha * (newimage.at<Vec3b>(y, x)[2])); //x= alpha *x + beta  
+            nuevaImagen.at<Vec3b>(y, x)[0] = newimage.at<Vec3b>(y, x)[0];
+            nuevaImagen.at<Vec3b>(y, x)[1] = newimage.at<Vec3b>(y, x)[1];
+        }
+    }
+    cvtColor(nuevaImagen, nuevaImagen, CV_HSV2BGR);
+    return nuevaImagen;
+}
+
+Mat procesar(Mat image) {
+    if (test) {
+        return contrasteRGB(image);
+    } else {
+        return contrasteHSI(image);
+    }
 }
 
 Mat barrel(Mat imagen, double Cx, double Cy, double kx, double ky) {
@@ -52,7 +79,7 @@ Mat barrel(Mat imagen, double Cx, double Cy, double kx, double ky) {
             //mapy.at<float>(y, x) = (float)(ty*(1+ky*rt)+Cy);
         }
     }
-    remap(imagen, dst, mapx, mapy, INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
+    remap(imagen, ndst, mapx, mapy, INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
     return ndst;
 }
 
@@ -190,28 +217,28 @@ Mat alien2(Mat imagen) {
     Mat hsv;
     cvtColor(imagen, hsv, CV_BGR2HSV);
     Mat bw;
-    inRange(hsv, Scalar(0, 40, 60), Scalar(20, 150, 255), bw);
-    //inRange(hsv, Scalar(0, 10, 60), Scalar(20, 150, 255), bw);
+    //inRange(hsv, Scalar(0, 40, 60), Scalar(20, 150, 255), bw);
+    inRange(hsv, Scalar(0, 10, 60), Scalar(20, 150, 255), bw);
     return bw;
 }
 
 bool R1(int R, int G, int B) {
-    bool e1 = (R>95) && (G>40) && (B>20) && ((max(R,max(G,B)) - min(R, min(G,B)))>15) && (abs(R-G)>15) && (R>G) && (R>B);
-    bool e2 = (R>220) && (G>210) && (B>170) && (abs(R-G)<=15) && (R>B) && (G>B);
-    return (e1||e2);
+    bool e1 = (R > 95) && (G > 40) && (B > 20) && ((max(R, max(G, B)) - min(R, min(G, B))) > 15) && (abs(R - G) > 15) && (R > G) && (R > B);
+    bool e2 = (R > 220) && (G > 210) && (B > 170) && (abs(R - G) <= 15) && (R > B) && (G > B);
+    return (e1 || e2);
 }
 
 bool R2(float Y, float Cr, float Cb) {
-    bool e3 = Cr <= 1.5862*Cb+20;
-    bool e4 = Cr >= 0.3448*Cb+76.2069;
-    bool e5 = Cr >= -4.5652*Cb+234.5652;
-    bool e6 = Cr <= -1.15*Cb+301.75;
-    bool e7 = Cr <= -2.2857*Cb+432.85;
+    bool e3 = Cr <= 1.5862 * Cb + 20;
+    bool e4 = Cr >= 0.3448 * Cb + 76.2069;
+    bool e5 = Cr >= -4.5652 * Cb + 234.5652;
+    bool e6 = Cr <= -1.15 * Cb + 301.75;
+    bool e7 = Cr <= -2.2857 * Cb + 432.85;
     return e3 && e4 && e5 && e6 && e7;
 }
 
 bool R3(float H, float S, float V) {
-    return (H<25) || (H > 230);
+    return (H < 25) || (H > 230);
 }
 
 Mat alien3(Mat const &src) {
@@ -235,31 +262,31 @@ Mat alien3(Mat const &src) {
     // Now scale the values between [0,255]:
     normalize(src_hsv, src_hsv, 0.0, 255.0, NORM_MINMAX, CV_32FC3);
 
-    for(int i = 0; i < src.rows; i++) {
-        for(int j = 0; j < src.cols; j++) {
+    for (int i = 0; i < src.rows; i++) {
+        for (int j = 0; j < src.cols; j++) {
 
             Vec3b pix_bgr = src.ptr<Vec3b>(i)[j];
             int B = pix_bgr.val[0];
             int G = pix_bgr.val[1];
             int R = pix_bgr.val[2];
             // apply rgb rule
-            bool a = R1(R,G,B);
+            bool a = R1(R, G, B);
 
             Vec3b pix_ycrcb = src_ycrcb.ptr<Vec3b>(i)[j];
             int Y = pix_ycrcb.val[0];
             int Cr = pix_ycrcb.val[1];
             int Cb = pix_ycrcb.val[2];
             // apply ycrcb rule
-            bool b = R2(Y,Cr,Cb);
+            bool b = R2(Y, Cr, Cb);
 
             Vec3f pix_hsv = src_hsv.ptr<Vec3f>(i)[j];
             float H = pix_hsv.val[0];
             float S = pix_hsv.val[1];
             float V = pix_hsv.val[2];
             // apply hsv rule
-            bool c = R3(H,S,V);
+            bool c = R3(H, S, V);
 
-            if(!(a&&b&&c))
+            if (!(a && b && c))
                 dst.ptr<Vec3b>(i)[j] = cblack;
         }
     }
@@ -323,7 +350,7 @@ void colorReduce(Mat &image, int div = 64) { //Version libro, falla en camara
 
     for (int i = 0; i < 256; i++) {
 
-        lookup.at<uchar>(i) = i / div * div + div / 2;
+        lookup.at<uchar>(i) = i / div * div + div / 2; //Solo un canal
         LUT(image, lookup, image);
     }
 }
@@ -395,9 +422,8 @@ int main(int argc, char *argv[]) {
                 // NuevaImagen = barril(procesar(bgrMap));
                 break;
             case 5:
-                if (!test) {
-                    NuevaImagen = barrel(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, -2, -2);
-                }
+                NuevaImagen = barrel(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, cof, cof);
+                //NuevaImagen = invertir(bgrMap);
                 break;
             default:
                 NuevaImagen = procesar(bgrMap);
@@ -416,17 +442,25 @@ int main(int argc, char *argv[]) {
                 snapshotFilename = static_cast<std::ostringstream*> (&(std::ostringstream() << numSnapshot))->str();
                 break;
             case 116: //t
-                if (alpha > 1) {
-                    alpha -= 0.25;
+                if (filtro != 5) {
+                    if (alpha > 1) {
+                        alpha -= 0.25;
+                    }
+                    std::cout << "Contraste - (" << alpha << ")" << std::endl;
+                } else {
+                    cof = cof / 10;
                 }
-                std::cout << "Contraste - (" << alpha << ")" << std::endl;
                 break;
 
             case 117: //u
-                if (alpha < 3) {
-                    alpha += 0.25;
+                if (filtro != 5) {
+                    if (alpha < 3) {
+                        alpha += 0.25;
+                    }
+                    std::cout << "Contraste + (" << alpha << ")" << std::endl;
+                } else {
+                    cof = cof * 10;
                 }
-                std::cout << "Contraste + (" << alpha << ")" << std::endl;
                 break;
             case 118: //v
                 if (filtro != 1) {
@@ -472,6 +506,17 @@ int main(int argc, char *argv[]) {
                 } else {
                     std::cout << "Barril Desactivado" << std::endl;
                     filtro = 0;
+                }
+                break;
+            case 110://n
+                if (test) {
+                    std::cout << "Modo contraste cambiado" << std::endl;
+                    test = false;
+                    cof=cof*-1;
+                    std::cout << cof << std::endl;
+                } else {
+                    std::cout << "Modo contraste cambiado" << std::endl;
+                    test = true;
                 }
                 break;
         }
