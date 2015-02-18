@@ -42,10 +42,10 @@ Mat barrel(Mat imagen, double Cx, double Cy, double kx, double ky) {
     int w = imagen.cols;
 
     for (int y = 0; y < h; y++) {
-        int ty = y - Cy;
+        // int ty = y - Cy;
         for (int x = 0; x < w; x++) {
-            int tx = x - Cx;
-            int rt = tx * tx + ty*ty;
+            // int tx = x - Cx;
+            // int rt = tx * tx + ty*ty;
             mapx.at<float>(y, x) = Cx + (x - Cx)*(1 + kx * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
             mapy.at<float>(y, x) = Cy + (y - Cy)*(1 + ky * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
             //mapx.at<float>(y, x) =(float)(tx*(1+kx*rt)+Cx);
@@ -126,6 +126,146 @@ Mat barrel_pincusion_dist(Mat imagen, double Cx, double Cy, double kx, double ky
 
 }
 
+int maxl(unsigned char a, unsigned char b, unsigned char c) {
+    if (a > b) {
+        b = a;
+    }
+    if (c > b) {
+        return c;
+    }
+    return b;
+}
+
+/** Valor menor entre tres numeros*/
+int minl(unsigned char a, unsigned char b, unsigned char c) {
+    if (a < b) {
+        b = a;
+    }
+    if (c < b) {
+        return c;
+    }
+    return b;
+}
+
+int absl(int a) {
+    if (a < 0) {
+        return -a;
+    }
+    return a;
+}
+
+bool detectarPiel(int R, int G, int B) {
+    if (R > 95 && G > 40 && B > 20 && (maxl(R, G, B) - minl(R, G, B)) > 15 && absl((int) (R - G)) > 15 && R > G && R > B) {
+        return true;
+    }
+    return false;
+}
+
+Mat alien(Mat image) {
+    Mat nuevaImagen = Mat::zeros(image.size(), image.type());
+    int R, G, B;
+
+    for (int y = 0; y < image.rows; y++) {
+        for (int x = 0; x < image.cols; x++) {
+            R = image.at<Vec3b>(y, x)[0];
+            G = image.at<Vec3b>(y, x)[1];
+            B = image.at<Vec3b>(y, x)[2];
+
+            if (detectarPiel(R, G, B)) {
+                nuevaImagen.at<Vec3b>(y, x)[0] = 1;
+                nuevaImagen.at<Vec3b>(y, x)[1] = 200;
+                nuevaImagen.at<Vec3b>(y, x)[2] = 1;
+            } else {
+
+                nuevaImagen.at<Vec3b>(y, x)[0] = image.at<Vec3b>(y, x)[0];
+                nuevaImagen.at<Vec3b>(y, x)[1] = image.at<Vec3b>(y, x)[1];
+                nuevaImagen.at<Vec3b>(y, x)[2] = image.at<Vec3b>(y, x)[2];
+            }
+        }
+    }
+    return nuevaImagen;
+}
+
+Mat alien2(Mat imagen) {
+    Mat hsv;
+    cvtColor(imagen, hsv, CV_BGR2HSV);
+    Mat bw;
+    inRange(hsv, Scalar(0, 40, 60), Scalar(20, 150, 255), bw);
+    //inRange(hsv, Scalar(0, 10, 60), Scalar(20, 150, 255), bw);
+    return bw;
+}
+
+bool R1(int R, int G, int B) {
+    bool e1 = (R>95) && (G>40) && (B>20) && ((max(R,max(G,B)) - min(R, min(G,B)))>15) && (abs(R-G)>15) && (R>G) && (R>B);
+    bool e2 = (R>220) && (G>210) && (B>170) && (abs(R-G)<=15) && (R>B) && (G>B);
+    return (e1||e2);
+}
+
+bool R2(float Y, float Cr, float Cb) {
+    bool e3 = Cr <= 1.5862*Cb+20;
+    bool e4 = Cr >= 0.3448*Cb+76.2069;
+    bool e5 = Cr >= -4.5652*Cb+234.5652;
+    bool e6 = Cr <= -1.15*Cb+301.75;
+    bool e7 = Cr <= -2.2857*Cb+432.85;
+    return e3 && e4 && e5 && e6 && e7;
+}
+
+bool R3(float H, float S, float V) {
+    return (H<25) || (H > 230);
+}
+
+Mat alien3(Mat const &src) {
+    // allocate the result matrix
+    Mat dst = src.clone();
+
+    Vec3b cwhite = Vec3b::all(255);
+    Vec3b cblack = Vec3b::all(0);
+
+    Mat src_ycrcb, src_hsv;
+    // OpenCV scales the YCrCb components, so that they
+    // cover the whole value range of [0,255], so there's
+    // no need to scale the values:
+    cvtColor(src, src_ycrcb, CV_BGR2YCrCb);
+    // OpenCV scales the Hue Channel to [0,180] for
+    // 8bit images, so make sure we are operating on
+    // the full spectrum from [0,360] by using floating
+    // point precision:
+    src.convertTo(src_hsv, CV_32FC3);
+    cvtColor(src_hsv, src_hsv, CV_BGR2HSV);
+    // Now scale the values between [0,255]:
+    normalize(src_hsv, src_hsv, 0.0, 255.0, NORM_MINMAX, CV_32FC3);
+
+    for(int i = 0; i < src.rows; i++) {
+        for(int j = 0; j < src.cols; j++) {
+
+            Vec3b pix_bgr = src.ptr<Vec3b>(i)[j];
+            int B = pix_bgr.val[0];
+            int G = pix_bgr.val[1];
+            int R = pix_bgr.val[2];
+            // apply rgb rule
+            bool a = R1(R,G,B);
+
+            Vec3b pix_ycrcb = src_ycrcb.ptr<Vec3b>(i)[j];
+            int Y = pix_ycrcb.val[0];
+            int Cr = pix_ycrcb.val[1];
+            int Cb = pix_ycrcb.val[2];
+            // apply ycrcb rule
+            bool b = R2(Y,Cr,Cb);
+
+            Vec3f pix_hsv = src_hsv.ptr<Vec3f>(i)[j];
+            float H = pix_hsv.val[0];
+            float S = pix_hsv.val[1];
+            float V = pix_hsv.val[2];
+            // apply hsv rule
+            bool c = R3(H,S,V);
+
+            if(!(a&&b&&c))
+                dst.ptr<Vec3b>(i)[j] = cblack;
+        }
+    }
+    return dst;
+}
+
 Mat invertir(Mat imagen) {
     Mat mapx, mapy, dst;
 
@@ -143,6 +283,7 @@ Mat invertir(Mat imagen) {
         }
     }
     remap(imagen, dst, mapx, mapy, CV_INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
+
     return dst;
 }
 
@@ -152,6 +293,7 @@ Mat negativo(Mat image) {
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
             for (int c = 0; c < 3; c++) { //RGB
+
                 nuevaImagen.at<Vec3b>(y, x)[c] =
                         saturate_cast<uchar>(256 - (image.at<Vec3b>(y, x)[c]));
             }
@@ -166,11 +308,13 @@ Mat eculizarHistograma(Mat image) {//Falla para un contraste mayor que 2 si se e
     cvtColor(image, image, CV_BGR2GRAY);
     /// Apply Histogram Equalization
     equalizeHist(image, nuevaImagen); //No funciona con rgb
+
     return nuevaImagen;
 }
 
 Mat cambiarEscalaColores(Mat image) {
     cvtColor(image, image, CV_BGR2Lab);
+
     return image;
 }
 
@@ -178,6 +322,7 @@ void colorReduce(Mat &image, int div = 64) { //Version libro, falla en camara
     Mat lookup(1, 256, CV_8U);
 
     for (int i = 0; i < 256; i++) {
+
         lookup.at<uchar>(i) = i / div * div + div / 2;
         LUT(image, lookup, image);
     }
@@ -188,6 +333,7 @@ Mat colorReduce2(Mat image, int div = 64) { //Version Aron, funciona en camara, 
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
             for (int c = 0; c < 3; c++) { //RGB
+
                 nuevaImagen.at<Vec3b>(y, x)[c] =
                         saturate_cast<uchar>((image.at<Vec3b>(y, x)[c]) / div * div + div / 2);
             }
@@ -242,7 +388,7 @@ int main(int argc, char *argv[]) {
                 //colorReduce(NuevaImagen);
                 break;
             case 3:
-                NuevaImagen = cambiarEscalaColores(procesar(bgrMap));
+                NuevaImagen = alien3(procesar(bgrMap));
                 break;
             case 4:
                 NuevaImagen = negativo(procesar(bgrMap));
