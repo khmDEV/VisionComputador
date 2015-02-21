@@ -275,7 +275,7 @@ Mat removeNoise(Mat src) {
     return dst;
 }
 
-Mat alien3(Mat const &src) { 
+Mat alien3(Mat const &src) {
     // allocate the result matrix
     Mat dst = src.clone();
 
@@ -379,7 +379,7 @@ Mat cambiarEscalaColores(Mat image) {
     return image;
 }
 
-void colorReduce(Mat &image, int div = 64) { //Version libro, falla en camara
+void colorReduce(Mat &image, int div = 64) { //Version libro
     Mat lookup(1, 256, CV_8U);
 
     for (int i = 0; i < 256; i++) {
@@ -389,7 +389,7 @@ void colorReduce(Mat &image, int div = 64) { //Version libro, falla en camara
     }
 }
 
-Mat colorReduce2(Mat image, int div = 64) { //Version Aron, funciona en camara, jaj
+Mat colorReduce2(Mat image, int div = 64) { //Version Aron,
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
@@ -404,13 +404,13 @@ Mat colorReduce2(Mat image, int div = 64) { //Version Aron, funciona en camara, 
 
 }
 
-void calcCorrector(Mat m) {
+void calcCorrector(Mat m) { //Distancia del pixel al centro
     cof = cof > 255 ? 255 : cof;
     cof = cof<-0.25 ? -0.25 : cof;
     int Cx = m.cols / 2, Cy = m.rows / 2;
     double rTot = sqrt(Cx * Cx + Cy * Cy);
     float rtt = Cx / rTot;
-    float ca, cb;
+    float ca, cb; //No se usa??
     if ((cof)<(cof * rtt * rtt)) {
         correctorX = 1 / (1 + cof);
     } else {
@@ -430,7 +430,6 @@ int main(int argc, char *argv[]) {
     filtro = 0;
 
     Mat NuevaImagen;
-    IplImage img;
 
     char key = 0;
     int numSnapshot = 0;
@@ -443,7 +442,7 @@ int main(int argc, char *argv[]) {
     std::cout << "Press 'r' para activar/desctivar filtro de reduccion de colores" << std::endl;
     std::cout << "Press 'q' para activar/desctivar alineacion" << std::endl;
     std::cout << "Press 'p' para activar/desctivar filtro negativos" << std::endl;
-     std::cout << "Press 'l' para activar/desctivar invetir imagen" << std::endl;
+    std::cout << "Press 'l' para activar/desctivar invetir imagen" << std::endl;
     std::cout << "Press 'Esc' to exit" << std::endl;
 
     /// Create Windows
@@ -469,17 +468,17 @@ int main(int argc, char *argv[]) {
                 NuevaImagen = colorReduce2(procesar(bgrMap));
                 break;
             case 3:
-                NuevaImagen = alien3(procesar(bgrMap));
+                if (noise) {
+                    NuevaImagen = alien3(procesar(bgrMap));
+                } else {
+                    NuevaImagen = alien3(removeNoise(procesar(bgrMap)));
+                }
                 break;
             case 4:
                 NuevaImagen = negativo(procesar(bgrMap));
                 break;
             case 5:
-                if (noise) {
-                    NuevaImagen = barrel(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, cof, cof);
-                } else {
-                    NuevaImagen = barrel(removeNoise(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, cof, cof));
-                }
+                NuevaImagen = barrel(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, cof, cof);
                 break;
             case 6:
                 NuevaImagen = invertir(procesar(bgrMap));
