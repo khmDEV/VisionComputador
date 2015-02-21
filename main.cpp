@@ -218,13 +218,13 @@ Mat alien2(Mat imagen) { //Detectar piel escala HSV
     return bw;
 }
 
-bool R1(int R, int G, int B) {
+bool R1(int R, int G, int B) { //Mismos cooeficientes RGB
     bool e1 = (R > 95) && (G > 40) && (B > 20) && ((max(R, max(G, B)) - min(R, min(G, B))) > 15) && (abs(R - G) > 15) && (R > G) && (R > B);
     bool e2 = (R > 220) && (G > 210) && (B > 170) && (abs(R - G) <= 15) && (R > B) && (G > B);
     return (e1 || e2);
 }
 
-bool R2(float Y, float Cr, float Cb) {
+bool R2(float Y, float Cr, float Cb) { //Coenficientes YCrCb
     bool e3 = Cr <= 1.5862 * Cb + 20;
     bool e4 = Cr >= 0.3448 * Cb + 76.2069;
     bool e5 = Cr >= -4.5652 * Cb + 234.5652;
@@ -233,7 +233,7 @@ bool R2(float Y, float Cr, float Cb) {
     return e3 && e4 && e5 && e6 && e7;
 }
 
-bool R3(float H, float S, float V) {
+bool R3(float H, float S, float V) { //Coeficientes HSV
     return (H < 25) || (H > 230);
 }
 
@@ -281,6 +281,7 @@ Mat alien3(Mat const &src) {
 
     Vec3b cwhite = Vec3b::all(255);
     Vec3b cblack = Vec3b::all(0);
+    Vec3b cgreen = (0, 0, 255);
 
     Mat src_ycrcb, src_hsv;
     // OpenCV scales the YCrCb components, so that they
@@ -320,8 +321,8 @@ Mat alien3(Mat const &src) {
             // apply hsv rule
             bool c = R3(H, S, V);
 
-            if (!(a && b && c))
-                dst.ptr<Vec3b>(i)[j] = cblack;
+            if ((a && b && c))
+                dst.ptr<Vec3b>(i)[j] = cgreen;
         }
     }
     return dst;
@@ -354,7 +355,6 @@ Mat negativo(Mat image) {
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
             for (int c = 0; c < 3; c++) { //RGB
-
                 nuevaImagen.at<Vec3b>(y, x)[c] =
                         saturate_cast<uchar>(256 - (image.at<Vec3b>(y, x)[c]));
             }
@@ -363,7 +363,7 @@ Mat negativo(Mat image) {
     return nuevaImagen;
 }
 
-Mat eculizarHistograma(Mat image) {//Falla para un contraste mayor que 2 si se ecualiza y luego se procesa
+Mat eculizarHistograma(Mat image) {
     Mat nuevaImagen;
     /// Convert to grayscale
     cvtColor(image, image, CV_BGR2GRAY);
@@ -389,7 +389,7 @@ void colorReduce(Mat &image, int div = 64) { //Version libro
     }
 }
 
-Mat colorReduce2(Mat image, int div = 64) { //Version Aron,
+Mat colorReduce2(Mat image, int div = 64) { //Version Aron, RGB
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
@@ -404,9 +404,27 @@ Mat colorReduce2(Mat image, int div = 64) { //Version Aron,
 
 }
 
+Mat colorReduce3(Mat image, int div = 64) { //Version Aron, HVS
+    Mat nuevaImagen = Mat::zeros(image.size(), image.type());
+    Mat hsv;
+    cvtColor(image, hsv, CV_BGR2HSV);
+    for (int y = 0; y < hsv.rows; y++) {
+        for (int x = 0; x < hsv.cols; x++) {
+            nuevaImagen.at<Vec3b>(y, x)[1] =
+                    saturate_cast<uchar>((hsv.at<Vec3b>(y, x)[1]) / div * div + div / 2);
+            nuevaImagen.at<Vec3b>(y, x)[0] = hsv.at<Vec3b>(y, x)[0];
+            nuevaImagen.at<Vec3b>(y, x)[2] = hsv.at<Vec3b>(y, x)[2];
+
+        }
+    }
+    cvtColor(nuevaImagen, nuevaImagen, CV_HSV2BGR);
+    return nuevaImagen;
+
+}
+
 void calcCorrector(Mat m) { //Distancia del pixel al centro
     cof = cof > 255 ? 255 : cof;
-    cof = cof<-0.25 ? -0.25 : cof;
+    cof = cof < 0 && cof < -0.25 ? -0.25 : cof;
     int Cx = m.cols / 2, Cy = m.rows / 2;
     double rTot = sqrt(Cx * Cx + Cy * Cy);
     float rtt = Cx / rTot;
@@ -465,7 +483,7 @@ int main(int argc, char *argv[]) {
                 break;
 
             case 2:
-                NuevaImagen = colorReduce2(procesar(bgrMap));
+                NuevaImagen = colorReduce3(procesar(bgrMap));
                 break;
             case 3:
                 if (noise) {
