@@ -17,7 +17,7 @@ double alpha; /**< Simple contrast control */
 int beta; /**< Simple brightness control*/
 float cof = 1;
 float correctorX = 1.33, correctorY = 1.33;
-int filtro; // 0-Nornal, 1- Filtro de grises, 2-Escala de colores,3-Filtro alienacion, 4- Filtro Negativo
+int filtro,alienMode=0; // 0-Nornal, 1- Filtro de grises, 2-Escala de colores,3-Filtro alienacion, 4- Filtro Negativo
 
 Mat contrasteRGB(Mat image) {
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
@@ -49,14 +49,6 @@ Mat contrasteHSI(Mat image) {
     }
     cvtColor(nuevaImagen, nuevaImagen, CV_HSV2BGR);
     return nuevaImagen;
-}
-
-Mat procesar(Mat image) {
-    if (test) {
-        return contrasteRGB(image);
-    } else {
-        return contrasteHSI(image);
-    }
 }
 
 Mat barrel(Mat imagen, double Cx, double Cy, double kx, double ky) {
@@ -150,8 +142,8 @@ Mat barrel_pincusion_dist(Mat imagen, double Cx, double Cy, double kx, double ky
 }
 
 bool R1(int R, int G, int B) { //Mismos cooeficientes RGB
-    bool e1 = (R > 95) && (G > 40) && (B > 20) && ((max(R, max(G, B)) - min(R, min(G, B))) > 15) && (abs(R - G) > 15) && (R > G) && (R > B);
-    bool e2 = (R > 220) && (G > 210) && (B > 170) && (abs(R - G) <= 15) && (R > B) && (G > B);
+    bool e1 = (R > 95) && (G > 40) && (B > 20) ;//&& ((max(R, max(G, B)) - min(R, min(G, B))) > 15) && (abs(R - G) > 15) && (R > G) && (R > B);
+    bool e2 = (R > 220) && (G > 210) && (B > 170) ;//&& (abs(R - G) <= 15) && (R > B) && (G > B);
     return (e1 || e2);
 }
 
@@ -176,7 +168,7 @@ bool R3(float H, float S, float V) { //Coeficientes HSV
 Mat alien(Mat image) { //Detectar piel escala RGB
     Mat nuevaImagen = image.clone();
     int R, G, B;
-
+    Vec3b cgreen = (0, 0, 255);
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
             R = image.at<Vec3b>(y, x)[0];
@@ -184,25 +176,15 @@ Mat alien(Mat image) { //Detectar piel escala RGB
             B = image.at<Vec3b>(y, x)[2];
 
             if (R1(R, G, B)) {
-                nuevaImagen.at<Vec3b>(y, x)[0] = 1;
-                nuevaImagen.at<Vec3b>(y, x)[1] = 200;
-                nuevaImagen.at<Vec3b>(y, x)[2] = 1;
+                nuevaImagen.ptr<Vec3b>(y)[x] = cgreen;
             }
         }
     }
     return nuevaImagen;
 }
 
-Mat alien2(Mat imagen) { //Detectar piel escala HSV
-    Mat hsv;
-    cvtColor(imagen, hsv, CV_BGR2HSV);
-    Mat bw;
-    //inRange(hsv, Scalar(0, 40, 60), Scalar(20, 150, 255), bw);
-    inRange(hsv, Scalar(0, 10, 60), Scalar(25, 150, 255), bw);
-    return bw;
-}
 
-Mat alien3(Mat image) { //Detectar piel  YCrCb
+Mat alien2(Mat image) { //Detectar piel  YCrCb
     Mat src_ycrcb;
     cvtColor(image, src_ycrcb, CV_BGR2YCrCb);
     Mat nuevaImagen = image.clone();
@@ -214,7 +196,7 @@ Mat alien3(Mat image) { //Detectar piel  YCrCb
             Cr = src_ycrcb.at<Vec3b>(y, x)[1];
             Cb = src_ycrcb.at<Vec3b>(y, x)[2];
 
-            if (!R2A(Y, Cr, Cb)) {
+            if (R2A(Y, Cr, Cb)) {
                 nuevaImagen.at<Vec3b>(y, x)[0] = 1;
                 nuevaImagen.at<Vec3b>(y, x)[1] = 200;
                 nuevaImagen.at<Vec3b>(y, x)[2] = 1;
@@ -224,6 +206,29 @@ Mat alien3(Mat image) { //Detectar piel  YCrCb
     return nuevaImagen;
 }
 
+Mat alien3(Mat imagen) { //Detectar piel escala HSV
+    Mat hsv;
+    imagen.convertTo(hsv, CV_32FC3);
+    cvtColor(hsv, hsv, CV_BGR2HSV);
+    normalize(hsv, hsv, 0.0, 255.0, NORM_MINMAX, CV_32FC3);
+
+    Mat dst=imagen.clone();
+    Vec3b cgreen = (0, 0, 255);
+    //inRange(hsv, Scalar(0, 40, 60), Scalar(20, 150, 255), bw);
+    for (int i = 0; i < imagen.rows; i++) {
+        for (int j = 0; j < imagen.cols; j++) {
+
+            Vec3f pix_hsv = hsv.ptr<Vec3f>(i)[j];
+            float H = pix_hsv.val[0];
+            float S = pix_hsv.val[1];
+            float V = pix_hsv.val[2];
+	    if(R3(H, S, V)){
+                dst.ptr<Vec3b>(i)[j] = cgreen;
+	    }
+	}
+    }
+    return dst;
+}
 Mat removeNoise(Mat src) {
     Mat dst = src.clone();
     int v[3][3] = {
@@ -351,14 +356,16 @@ Mat negativo(Mat image) {
     return nuevaImagen;
 }
 
-Mat eculizarHistograma(Mat image) {
-    Mat nuevaImagen;
-    /// Convert to grayscale
-    cvtColor(image, image, CV_BGR2GRAY);
-    /// Apply Histogram Equalization
-    equalizeHist(image, nuevaImagen); //No funciona con rgb
+Mat eculizarHistograma(Mat bgrMap) {
 
-    return nuevaImagen;
+
+    IplImage imag = bgrMap.clone();IplImage *image=&imag;
+  IplImage* img = cvCreateImage( cvGetSize(image), IPL_DEPTH_8U, 1 );
+  cvCvtColor( image, img, CV_BGR2GRAY );
+    Mat nuevaImagen=cvarrToMat(img);
+    equalizeHist(nuevaImagen, nuevaImagen); //No funciona con rgb
+    nuevaImagen.convertTo(nuevaImagen, bgrMap.type());
+    return nuevaImagen;//nuevaImagen;
 }
 
 Mat cambiarEscalaColores(Mat image) {
@@ -367,17 +374,7 @@ Mat cambiarEscalaColores(Mat image) {
     return image;
 }
 
-void colorReduce(Mat &image, int div = 64) { //Version libro
-    Mat lookup(1, 256, CV_8U);
-
-    for (int i = 0; i < 256; i++) {
-
-        lookup.at<uchar>(i) = i / div * div + div / 2; //Solo un canal
-        LUT(image, lookup, image);
-    }
-}
-
-Mat colorReduce2(Mat image, int div = 64) { //Version Aron, RGB
+Mat colorReduce(Mat image, int div = 64) { //Version Aron, RGB
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
@@ -392,7 +389,7 @@ Mat colorReduce2(Mat image, int div = 64) { //Version Aron, RGB
 
 }
 
-Mat colorReduce3(Mat image, int div = 64) { //Version Aron, HVS
+Mat colorReduce2(Mat image, int div = 64) { //Version Aron, HVS
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     Mat hsv;
     cvtColor(image, hsv, CV_BGR2HSV);
@@ -430,6 +427,54 @@ void calcCorrector(Mat m) { //Distancia del pixel al centro
     }
 }
 
+Mat procesar(Mat image) {
+    if (noise) {
+          image = removeNoise(image);
+    }
+    if (test) {
+        return contrasteRGB(image);
+    } else {
+        return contrasteHSI(image);
+    }
+}
+/*
+ * Based in http://awesomebytes.com/2011/03/16/dibujando-un-histograma-de-una-imagen-en-opencv/
+ */
+IplImage* create_histogram_image(Mat bgrMap)
+{
+  IplImage imag = bgrMap;IplImage *image=&imag;
+  IplImage* img = cvCreateImage( cvGetSize(image), IPL_DEPTH_8U, 1 );
+  cvCvtColor( image, img, CV_BGR2GRAY );
+  IplImage *hist_img = cvCreateImage(cvSize(300,240), 8, 1);
+  cvSet( hist_img, cvScalarAll(255), 0 );
+  CvHistogram *hist;
+
+  int hist_size = 256;
+  float range[]={0,256};
+  float* ranges[] = { range };
+  float max_value = 0.0, min_value = 0.0;
+  float w_scale = 0.0;
+
+  hist = cvCreateHist(1, &hist_size, CV_HIST_ARRAY, ranges, 1);
+
+  cvCalcHist( &img, hist, 0, NULL );
+
+  cvGetMinMaxHistValue( hist, &min_value, &max_value);
+
+  cvScale( hist->bins, hist->bins, ((float)hist_img->height)/max_value, 0 );
+
+  w_scale = ((float)hist_img->width)/hist_size;
+
+  for( int i = 0; i < hist_size; i++ )
+  {
+    cvRectangle( hist_img, cvPoint((int)i*w_scale , hist_img->height),
+	             cvPoint((int)(i+1)*w_scale, hist_img->height - cvRound(cvGetReal1D(hist->bins,i))),
+	             cvScalar(0), -1, 8, 0 );
+  }
+
+
+  return hist_img;
+}
 int main(int argc, char *argv[]) {
     alpha = 1;
     beta = 0;
@@ -471,33 +516,46 @@ int main(int argc, char *argv[]) {
                 break;
 
             case 2:
-                // NuevaImagen = colorReduce3(procesar(bgrMap));
-                NuevaImagen = alien(procesar(bgrMap));
+                NuevaImagen = colorReduce(procesar(bgrMap));
                 break;
             case 3:
-                if (!noise) {
-                    NuevaImagen = alinenacion(procesar(bgrMap));
-                } else {
-                    NuevaImagen = alinenacion(removeNoise(procesar(bgrMap)));
-                }
+                switch (alienMode){
+                	case 0:
+                		NuevaImagen = alinenacion(procesar(bgrMap));
+                		break;
+			case 1:
+				NuevaImagen = alien(procesar(bgrMap));
+                		break;
+			case 2:
+				NuevaImagen = alien2(procesar(bgrMap));
+                		break;
+			case 3:
+				NuevaImagen = alien3(procesar(bgrMap));
+                		break;
+		}
+                
                 break;
             case 4:
-                NuevaImagen = alien3(procesar(bgrMap));
-                // NuevaImagen = negativo(procesar(bgrMap));
+                 NuevaImagen = negativo(procesar(bgrMap));
                 break;
             case 5:
                 NuevaImagen = barrel(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, cof, cof);
                 break;
             case 6:
-                //NuevaImagen = invertir(procesar(bgrMap));
-                NuevaImagen = alien2(procesar(bgrMap));
+                NuevaImagen = invertir(procesar(bgrMap));
                 break;
             default:
                 NuevaImagen = procesar(bgrMap);
         }
 
         imshow("BGR image", bgrMap); //Muestra por pantalla
-        imshow("Nueva Imagen", NuevaImagen);
+        imshow("Nueva Imagen", NuevaImagen);printf("%i\n",NuevaImagen.type());
+
+  	IplImage *hist_img = create_histogram_image(bgrMap);
+  	cvShowImage( "Histograma original", hist_img );
+
+  	IplImage *hist_img2 = create_histogram_image(NuevaImagen);
+  	cvShowImage( "Histograma destino", hist_img2 );
 
         switch (key) {
 
@@ -584,7 +642,10 @@ int main(int argc, char *argv[]) {
                 if (filtro == 5) {
                     cof = cof > 0 ? -0.25 : 1;
                     calcCorrector(bgrMap);
-                } else {
+                } else if(filtro == 3){
+                    alienMode=alienMode>=3?0:(alienMode+1);
+                    std::cout << "Modo alien " << alienMode << std::endl;
+		}else{
                     if (test) {
                         std::cout << "Modo contraste cambiado" << std::endl;
                         test = false;
@@ -615,6 +676,7 @@ int main(int argc, char *argv[]) {
                 }
                 break;
         }
+
 
         key = waitKey(20);
     }
