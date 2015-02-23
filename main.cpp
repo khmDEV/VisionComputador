@@ -356,16 +356,14 @@ Mat negativo(Mat image) {
     return nuevaImagen;
 }
 
-Mat eculizarHistograma(Mat bgrMap) {
+Mat eculizarHistograma(Mat image) {
+    Mat nuevaImagen;
+    /// Convert to grayscale
+    cvtColor(image, image, CV_BGR2GRAY);
+    /// Apply Histogram Equalization
+    equalizeHist(image, nuevaImagen); //No funciona con rgb
 
-
-    IplImage imag = bgrMap.clone();IplImage *image=&imag;
-  IplImage* img = cvCreateImage( cvGetSize(image), IPL_DEPTH_8U, 1 );
-  cvCvtColor( image, img, CV_BGR2GRAY );
-    Mat nuevaImagen=cvarrToMat(img);
-    equalizeHist(nuevaImagen, nuevaImagen); //No funciona con rgb
-    nuevaImagen.convertTo(nuevaImagen, bgrMap.type());
-    return nuevaImagen;//nuevaImagen;
+    return nuevaImagen;
 }
 
 Mat cambiarEscalaColores(Mat image) {
@@ -444,7 +442,9 @@ IplImage* create_histogram_image(Mat bgrMap)
 {
   IplImage imag = bgrMap;IplImage *image=&imag;
   IplImage* img = cvCreateImage( cvGetSize(image), IPL_DEPTH_8U, 1 );
-  cvCvtColor( image, img, CV_BGR2GRAY );
+  if(bgrMap.type()==16){ // Solo aplica escala de grises si no se ha aplicado antes
+  	cvCvtColor( image, img, CV_BGR2GRAY );
+  }
   IplImage *hist_img = cvCreateImage(cvSize(300,240), 8, 1);
   cvSet( hist_img, cvScalarAll(255), 0 );
   CvHistogram *hist;
@@ -549,7 +549,7 @@ int main(int argc, char *argv[]) {
         }
 
         imshow("BGR image", bgrMap); //Muestra por pantalla
-        imshow("Nueva Imagen", NuevaImagen);printf("%i\n",NuevaImagen.type());
+        imshow("Nueva Imagen", NuevaImagen);
 
   	IplImage *hist_img = create_histogram_image(bgrMap);
   	cvShowImage( "Histograma original", hist_img );
