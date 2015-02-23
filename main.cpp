@@ -149,75 +149,6 @@ Mat barrel_pincusion_dist(Mat imagen, double Cx, double Cy, double kx, double ky
 
 }
 
-int maxl(unsigned char a, unsigned char b, unsigned char c) {
-    if (a > b) {
-        b = a;
-    }
-    if (c > b) {
-        return c;
-    }
-    return b;
-}
-
-/** Valor menor entre tres numeros*/
-int minl(unsigned char a, unsigned char b, unsigned char c) {
-    if (a < b) {
-        b = a;
-    }
-    if (c < b) {
-        return c;
-    }
-    return b;
-}
-
-int absl(int a) {
-    if (a < 0) {
-        return -a;
-    }
-    return a;
-}
-
-bool detectarPiel(int R, int G, int B) {
-    if (R > 95 && G > 40 && B > 20 && (maxl(R, G, B) - minl(R, G, B)) > 15 && absl((int) (R - G)) > 15 && R > G && R > B) {
-        return true;
-    }
-    return false;
-}
-
-Mat alien(Mat image) { //Detectar piel escala RGB
-    Mat nuevaImagen = Mat::zeros(image.size(), image.type());
-    int R, G, B;
-
-    for (int y = 0; y < image.rows; y++) {
-        for (int x = 0; x < image.cols; x++) {
-            R = image.at<Vec3b>(y, x)[0];
-            G = image.at<Vec3b>(y, x)[1];
-            B = image.at<Vec3b>(y, x)[2];
-
-            if (detectarPiel(R, G, B)) {
-                nuevaImagen.at<Vec3b>(y, x)[0] = 1;
-                nuevaImagen.at<Vec3b>(y, x)[1] = 200;
-                nuevaImagen.at<Vec3b>(y, x)[2] = 1;
-            } else {
-
-                nuevaImagen.at<Vec3b>(y, x)[0] = image.at<Vec3b>(y, x)[0];
-                nuevaImagen.at<Vec3b>(y, x)[1] = image.at<Vec3b>(y, x)[1];
-                nuevaImagen.at<Vec3b>(y, x)[2] = image.at<Vec3b>(y, x)[2];
-            }
-        }
-    }
-    return nuevaImagen;
-}
-
-Mat alien2(Mat imagen) { //Detectar piel escala HSV
-    Mat hsv;
-    cvtColor(imagen, hsv, CV_BGR2HSV);
-    Mat bw;
-    //inRange(hsv, Scalar(0, 40, 60), Scalar(20, 150, 255), bw);
-    inRange(hsv, Scalar(0, 10, 60), Scalar(20, 150, 255), bw);
-    return bw;
-}
-
 bool R1(int R, int G, int B) { //Mismos cooeficientes RGB
     bool e1 = (R > 95) && (G > 40) && (B > 20) && ((max(R, max(G, B)) - min(R, min(G, B))) > 15) && (abs(R - G) > 15) && (R > G) && (R > B);
     bool e2 = (R > 220) && (G > 210) && (B > 170) && (abs(R - G) <= 15) && (R > B) && (G > B);
@@ -233,8 +164,64 @@ bool R2(float Y, float Cr, float Cb) { //Coenficientes YCrCb
     return e3 && e4 && e5 && e6 && e7;
 }
 
+bool R2A(float Y, float Cr, float Cb) { //Coenficientes YCrCb
+    return ((Y > 80) && ((Cb > 85) || (Cr < 135)) && ((Cr > 135) || (Cr < 180)));
+}
+
 bool R3(float H, float S, float V) { //Coeficientes HSV
-    return (H < 25) || (H > 230);
+    //return (H < 25) || (H > 230);
+    return (((H < 25) || (H > 230)) && ((S > 10) || (S < 150)) && (V > 60));
+}
+
+Mat alien(Mat image) { //Detectar piel escala RGB
+    Mat nuevaImagen = image.clone();
+    int R, G, B;
+
+    for (int y = 0; y < image.rows; y++) {
+        for (int x = 0; x < image.cols; x++) {
+            R = image.at<Vec3b>(y, x)[0];
+            G = image.at<Vec3b>(y, x)[1];
+            B = image.at<Vec3b>(y, x)[2];
+
+            if (R1(R, G, B)) {
+                nuevaImagen.at<Vec3b>(y, x)[0] = 1;
+                nuevaImagen.at<Vec3b>(y, x)[1] = 200;
+                nuevaImagen.at<Vec3b>(y, x)[2] = 1;
+            }
+        }
+    }
+    return nuevaImagen;
+}
+
+Mat alien2(Mat imagen) { //Detectar piel escala HSV
+    Mat hsv;
+    cvtColor(imagen, hsv, CV_BGR2HSV);
+    Mat bw;
+    //inRange(hsv, Scalar(0, 40, 60), Scalar(20, 150, 255), bw);
+    inRange(hsv, Scalar(0, 10, 60), Scalar(25, 150, 255), bw);
+    return bw;
+}
+
+Mat alien3(Mat image) { //Detectar piel  YCrCb
+    Mat src_ycrcb;
+    cvtColor(image, src_ycrcb, CV_BGR2YCrCb);
+    Mat nuevaImagen = image.clone();
+    float Y, Cr, Cb;
+
+    for (int y = 0; y < image.rows; y++) {
+        for (int x = 0; x < image.cols; x++) {
+            Y = src_ycrcb.at<Vec3b>(y, x)[0];
+            Cr = src_ycrcb.at<Vec3b>(y, x)[1];
+            Cb = src_ycrcb.at<Vec3b>(y, x)[2];
+
+            if (!R2A(Y, Cr, Cb)) {
+                nuevaImagen.at<Vec3b>(y, x)[0] = 1;
+                nuevaImagen.at<Vec3b>(y, x)[1] = 200;
+                nuevaImagen.at<Vec3b>(y, x)[2] = 1;
+            }
+        }
+    }
+    return nuevaImagen;
 }
 
 Mat removeNoise(Mat src) {
@@ -275,7 +262,7 @@ Mat removeNoise(Mat src) {
     return dst;
 }
 
-Mat alien3(Mat const &src) {
+Mat alinenacion(Mat const &src) {
     // allocate the result matrix
     Mat dst = src.clone();
 
@@ -312,7 +299,7 @@ Mat alien3(Mat const &src) {
             int Cr = pix_ycrcb.val[1];
             int Cb = pix_ycrcb.val[2];
             // apply ycrcb rule
-            bool b = R2(Y, Cr, Cb);
+            bool b = R2A(Y, Cr, Cb);
 
             Vec3f pix_hsv = src_hsv.ptr<Vec3f>(i)[j];
             float H = pix_hsv.val[0];
@@ -321,7 +308,8 @@ Mat alien3(Mat const &src) {
             // apply hsv rule
             bool c = R3(H, S, V);
 
-            if ((a && b && c))
+           if ((a && b && c))
+               // if ((c))
                 dst.ptr<Vec3b>(i)[j] = cgreen;
         }
     }
@@ -483,23 +471,26 @@ int main(int argc, char *argv[]) {
                 break;
 
             case 2:
-                NuevaImagen = colorReduce3(procesar(bgrMap));
+                // NuevaImagen = colorReduce3(procesar(bgrMap));
+                NuevaImagen = alien(procesar(bgrMap));
                 break;
             case 3:
-                if (noise) {
-                    NuevaImagen = alien3(procesar(bgrMap));
+                if (!noise) {
+                    NuevaImagen = alinenacion(procesar(bgrMap));
                 } else {
-                    NuevaImagen = alien3(removeNoise(procesar(bgrMap)));
+                    NuevaImagen = alinenacion(removeNoise(procesar(bgrMap)));
                 }
                 break;
             case 4:
-                NuevaImagen = negativo(procesar(bgrMap));
+                NuevaImagen = alien3(procesar(bgrMap));
+                // NuevaImagen = negativo(procesar(bgrMap));
                 break;
             case 5:
                 NuevaImagen = barrel(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, cof, cof);
                 break;
             case 6:
-                NuevaImagen = invertir(procesar(bgrMap));
+                //NuevaImagen = invertir(procesar(bgrMap));
+                NuevaImagen = alien2(procesar(bgrMap));
                 break;
             default:
                 NuevaImagen = procesar(bgrMap);
@@ -513,7 +504,7 @@ int main(int argc, char *argv[]) {
             case 115: //s //Deshabilitado
                 std::cout << "Tomar Imagen" << std::endl;
 
-                imwrite(snapshotFilename + ".png", bgrMap);
+                imwrite(snapshotFilename + ".png", NuevaImagen);
                 numSnapshot++;
                 snapshotFilename = static_cast<std::ostringstream*> (&(std::ostringstream() << numSnapshot))->str();
                 break;
@@ -603,6 +594,7 @@ int main(int argc, char *argv[]) {
                         test = true;
                     }
                 }
+                break;
             case 109://m
                 if (noise) {
                     std::cout << "Modo eliminacion de ruido desactivado" << std::endl;
