@@ -60,7 +60,7 @@ Mat contrasteHSI(Mat image) {
     return nuevaImagen;
 }
 
-Mat barrel(Mat imagen, double Cx, double Cy, double kx, double ky) {
+Mat distorsion(Mat imagen, double Cx, double Cy, double kx, double ky) {
     Mat dst = Mat::zeros(imagen.size(), imagen.type());
     Mat mapx = Mat::zeros(imagen.size(), CV_32FC1);
     Mat mapy = Mat::zeros(imagen.size(), CV_32FC1);
@@ -290,7 +290,7 @@ Mat cambiarEscalaColores(Mat image) {
     return image;
 }
 
-Mat colorReduce(Mat image, int div = 64) { 
+Mat efectoPoster(Mat image, int div = 64) { 
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
@@ -305,7 +305,7 @@ Mat colorReduce(Mat image, int div = 64) {
 
 }
 
-Mat colorReduce2(Mat image, int div = 64) { 
+Mat efectoPoster2(Mat image, int div = 64) { 
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     Mat hsv;
     cvtColor(image, hsv, CV_BGR2HSV);
@@ -361,14 +361,16 @@ Mat effectVector(Mat src,vector<Vec3b> colors){
     }
 
 Mat procesar(Mat image) {
-    if (noise) {
-          image = removeNoise(image);
-    }
+    
     if (test) {
-        return contrasteRGB(image);
+        image = contrasteRGB(image);
     } else {
-        return contrasteHSI(image);
+        image = contrasteHSI(image);
     }
+    if (noise) {
+          return removeNoise(image);
+    }
+    return image;
 }
 
 
@@ -376,12 +378,13 @@ Mat create_histogram_image(Mat bgrMap)
 {
 
   int hist_size = 256;
-  float range[]={0,255};
+  float range[]={0,256};
   const float* ranges[] = { range };
   float max_value = 0.0, min_value = 0.0;
   float w_scale = 0.0;
-  
-  cvtColor(bgrMap, bgrMap, CV_BGR2GRAY);
+  if(bgrMap.type()==16){ // Solo aplica escala de grises si no se ha aplicado antes
+  	cvtColor( bgrMap, bgrMap, CV_BGR2GRAY );
+  }
 
   int bin_w = cvRound( (double) bgrMap.cols/hist_size );
   Mat hist,histImage( bgrMap.rows, bgrMap.cols, CV_8UC3, Scalar( 0,0,0) );
@@ -390,8 +393,8 @@ Mat create_histogram_image(Mat bgrMap)
   normalize(hist, hist, 0, histImage.rows, NORM_MINMAX, -1, Mat() );
 
   for(int i = 0; i < hist_size; i++ ){
-        line( histImage, Point( bin_w*(i-1), bgrMap.rows - cvRound(hist.at<float>(i-1)) ) ,
-                       Point( bin_w*(i), bgrMap.rows - cvRound(hist.at<float>(i)) ),
+        line( histImage, Point( bin_w*(i-1), histImage.rows - cvRound(hist.at<float>(i-1)) ) ,
+                       Point( bin_w*(i), histImage.rows - cvRound(hist.at<float>(i)) ),
                        Scalar( 255, 255, 255), 2, 8, 0  );
   }
   return histImage;
@@ -407,18 +410,18 @@ int main(int argc, char *argv[]) {
     char key = 0;
     int numSnapshot = 0;
     std::string snapshotFilename = "0";
-    std::cout << "Pulsa 'espacio' para hacer una captura" << std::endl;
+    std::cout << "Pulsa 'espacio'para hacer una captura" << std::endl;
     std::cout << "Pulsa '+' para aumentar contraste" << std::endl;
     std::cout << "Pulsa '-' para disminuir contraste" << std::endl;
-    std::cout << "Pulsa 'g' para activar/desctivar  filtro de grises" << std::endl;
-    std::cout << "Pulsa 'c' para activar/desctivar filtro de reduccion de colores" << std::endl;
-    std::cout << "Pulsa 'a' para activar/desctivar alineacion" << std::endl;
-    std::cout << "Pulsa 'n' para activar/desctivar filtro negativos" << std::endl;
+    std::cout << "Pulsa 'g' para activar/desactivar ecualizacion de histograma" << std::endl;
+    std::cout << "Pulsa 'c' para activar/desactivar filtro poster" << std::endl;
+    std::cout << "Pulsa 'a' para activar/desactivar efecto alien" << std::endl;
+    std::cout << "Pulsa 'n' para activar/desactivar filtro negativos" << std::endl;
     std::cout << "Pulsa 'm' para cambiar de modo" << std::endl;
-    std::cout << "Pulsa 'i' para activar/desctivar invetir imagen" << std::endl;
-    std::cout << "Pulsa 'r' para activar/desctivar reduccion de ruido" << std::endl;
-    std::cout << "Pulsa 'v' para activar/desctivar modo binario" << std::endl;
-    std::cout << "Pulsa 'b' para activar/desctivar modo distorsion" << std::endl;
+    std::cout << "Pulsa 'i' para activar/desactivar invetir imagen" << std::endl;
+    std::cout << "Pulsa 'r' para activar/desactivar reduccion de ruido" << std::endl;
+    std::cout << "Pulsa 'v' para activar/desactivar modo binario" << std::endl;
+    std::cout << "Pulsa 'b' para activar/desactivar modo distorsion" << std::endl;
     std::cout << "Pulsa 'escape' para salir" << std::endl;
    
 
@@ -456,9 +459,9 @@ int main(int argc, char *argv[]) {
 
             case 2:
                 if(posterMode==0){
-                	NuevaImagen = colorReduce(procesar(bgrMap));
+                	NuevaImagen = efectoPoster(procesar(bgrMap));
                 }else{
-                	NuevaImagen = colorReduce2(procesar(bgrMap));
+                	NuevaImagen = efectoPoster2(procesar(bgrMap));
                 }
                 break;
             case 3:
@@ -482,7 +485,7 @@ int main(int argc, char *argv[]) {
                  NuevaImagen = negativo(procesar(bgrMap));
                 break;
             case 5:
-                NuevaImagen = barrel(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, cof, cof);
+                NuevaImagen = distorsion(procesar(bgrMap), bgrMap.cols / 2, bgrMap.rows / 2, cof, cof);
                 break;
             case 6:
                 NuevaImagen = invertir(procesar(bgrMap));
@@ -539,29 +542,29 @@ int main(int argc, char *argv[]) {
                 break;
             case 103: //g
                 if (filtro != 1) {
-                    std::cout << "Escala de grises Activada" << std::endl;
+                    std::cout << "Ecualizacion de histograma Activada" << std::endl;
                     filtro = 1;
                 } else {
-                    std::cout << "Escala de grises Desactivada" << std::endl;
+                    std::cout << "Ecualizacion de histograma Desactivada" << std::endl;
                     filtro = 0;
                 }
                 break;
             case 99: //c
                 if (filtro != 2) {
-                    std::cout << "Reduccion de colores Activada" << std::endl;
+                    std::cout << "Efecto poster Activada" << std::endl;
                     filtro = 2;
                 } else {
-                    std::cout << "Reduccion de colores Desactivada" << std::endl;
+                    std::cout << "Efecto poster Desactivada" << std::endl;
                     filtro = 0;
                 }
                 break;
 
             case 97://a
                 if (filtro != 3) {
-                    std::cout << "Alineanacion Activada" << std::endl;
+                    std::cout << "Efecto alien Activada" << std::endl;
                     filtro = 3;
                 } else {
-                    std::cout << "Alineacion Desactivada" << std::endl;
+                    std::cout << "Efecto alien Desactivada" << std::endl;
                     filtro = 0;
                 }
                 break;
@@ -576,11 +579,11 @@ int main(int argc, char *argv[]) {
                 break;
             case 98://b
                 if (filtro != 5) {
-                    std::cout << "Barril Activado" << std::endl;
+                    std::cout << "Distorsion Activado" << std::endl;
                     calcCorrector(bgrMap);
                     filtro = 5;
                 } else {
-                    std::cout << "Barril Desactivado" << std::endl;
+                    std::cout << "Distorsion Desactivado" << std::endl;
                     filtro = 0;
                 }
                 break;
