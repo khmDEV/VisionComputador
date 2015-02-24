@@ -1,3 +1,8 @@
+/*
+ * Autores: Aron Collados (626558)
+ *          Cristian Roman (646564)
+ */
+
 #include <iostream>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -14,16 +19,18 @@ bool test = true,noise = false;
 double alpha, beta; 
 float cof = 1;
 float correctorX = 1.33, correctorY = 1.33;
-int filtro, // 0-Nornal, 1- Filtro de grises, 2-Escala de colores,3-Filtro alienacion, 4- Filtro Negativo
-	alienMode=0;
+int filtro, alienMode=0, posterMode=0;
 const Vec3b black(0, 0, 0),white(255, 255, 255),green = (0, 0, 255);
 
+/*
+ * Efecto de contrastre con RGB
+ */
 Mat contrasteRGB(Mat image) {
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
 
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
-            for (int c = 0; c < 3; c++) { //RGB
+            for (int c = 0; c < 3; c++) { 
                 nuevaImagen.at<Vec3b>(y, x)[c] =
                         saturate_cast<uchar>(alpha * (image.at<Vec3b>(y, x)[c]) + beta); //x= alpha *x + beta
             }
@@ -32,6 +39,9 @@ Mat contrasteRGB(Mat image) {
     return nuevaImagen;
 }
 
+/*
+ * Efecto de contrastre con HSI
+ */
 Mat contrasteHSI(Mat image) {
     Mat newimage;
     cvtColor(image, newimage, CV_BGR2HSV);
@@ -92,6 +102,43 @@ bool R2A(float Y, float Cr, float Cb) { //Coenficientes YCrCb
 bool R3(float H, float S, float V) { //Coeficientes HSV
     //return (H < 25) || (H > 230);
     return (((H < 25) || (H > 230)) && ((S > 10) || (S < 150)) && (V > 60));
+}
+
+Mat alinenacion(Mat src) {
+    Mat dst = src.clone();
+
+    Mat src_ycrcb, src_hsv;
+    cvtColor(src, src_ycrcb, CV_BGR2YCrCb);
+    src.convertTo(src_hsv, CV_32FC3);
+    cvtColor(src_hsv, src_hsv, CV_BGR2HSV);
+    normalize(src_hsv, src_hsv, 0.0, 255.0, NORM_MINMAX, CV_32FC3);
+
+    for (int i = 0; i < src.rows; i++) {
+        for (int j = 0; j < src.cols; j++) {
+
+            Vec3b pix_bgr = src.ptr<Vec3b>(i)[j];
+            int B = pix_bgr.val[0];
+            int G = pix_bgr.val[1];
+            int R = pix_bgr.val[2];
+            bool a = R1(R, G, B);
+
+            Vec3b pix_ycrcb = src_ycrcb.ptr<Vec3b>(i)[j];
+            int Y = pix_ycrcb.val[0];
+            int Cr = pix_ycrcb.val[1];
+            int Cb = pix_ycrcb.val[2];
+            bool b = R2A(Y, Cr, Cb);
+
+            Vec3f pix_hsv = src_hsv.ptr<Vec3f>(i)[j];
+            float H = pix_hsv.val[0];
+            float S = pix_hsv.val[1];
+            float V = pix_hsv.val[2];
+            bool c = R3(H, S, V);
+
+           if ((a && b && c))
+                dst.ptr<Vec3b>(i)[j] = green;
+        }
+    }
+    return dst;
 }
 
 Mat alien(Mat image) { //Detectar piel escala RGB
@@ -194,56 +241,6 @@ Mat removeNoise(Mat src) {
     return dst;
 }
 
-Mat alinenacion(Mat const &src) {
-    // allocate the result matrix
-    Mat dst = src.clone();
-
-    Mat src_ycrcb, src_hsv;
-    // OpenCV scales the YCrCb components, so that they
-    // cover the whole value range of [0,255], so there's
-    // no need to scale the values:
-    cvtColor(src, src_ycrcb, CV_BGR2YCrCb);
-    // OpenCV scales the Hue Channel to [0,180] for
-    // 8bit images, so make sure we are operating on
-    // the full spectrum from [0,360] by using floating
-    // point precision:
-    src.convertTo(src_hsv, CV_32FC3);
-    cvtColor(src_hsv, src_hsv, CV_BGR2HSV);
-    // Now scale the values between [0,255]:
-    normalize(src_hsv, src_hsv, 0.0, 255.0, NORM_MINMAX, CV_32FC3);
-
-    for (int i = 0; i < src.rows; i++) {
-        for (int j = 0; j < src.cols; j++) {
-
-            Vec3b pix_bgr = src.ptr<Vec3b>(i)[j];
-            int B = pix_bgr.val[0];
-            int G = pix_bgr.val[1];
-            int R = pix_bgr.val[2];
-            // apply rgb rule
-            bool a = R1(R, G, B);
-
-            Vec3b pix_ycrcb = src_ycrcb.ptr<Vec3b>(i)[j];
-            int Y = pix_ycrcb.val[0];
-            int Cr = pix_ycrcb.val[1];
-            int Cb = pix_ycrcb.val[2];
-            // apply ycrcb rule
-            bool b = R2A(Y, Cr, Cb);
-
-            Vec3f pix_hsv = src_hsv.ptr<Vec3f>(i)[j];
-            float H = pix_hsv.val[0];
-            float S = pix_hsv.val[1];
-            float V = pix_hsv.val[2];
-            // apply hsv rule
-            bool c = R3(H, S, V);
-
-           if ((a && b && c))
-               // if ((c))
-                dst.ptr<Vec3b>(i)[j] = green;
-        }
-    }
-    return dst;
-}
-
 Mat invertir(Mat imagen) {
     Mat mapx, mapy, dst;
 
@@ -281,9 +278,7 @@ Mat negativo(Mat image) {
 
 Mat eculizarHistograma(Mat image) {
     Mat nuevaImagen;
-    /// Convert to grayscale
     cvtColor(image, image, CV_BGR2GRAY);
-    /// Apply Histogram Equalization
     equalizeHist(image, nuevaImagen); //No funciona con rgb
 
     return nuevaImagen;
@@ -295,7 +290,7 @@ Mat cambiarEscalaColores(Mat image) {
     return image;
 }
 
-Mat colorReduce(Mat image, int div = 64) { //Version Aron, RGB
+Mat colorReduce(Mat image, int div = 64) { 
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
@@ -310,7 +305,7 @@ Mat colorReduce(Mat image, int div = 64) { //Version Aron, RGB
 
 }
 
-Mat colorReduce2(Mat image, int div = 64) { //Version Aron, HVS
+Mat colorReduce2(Mat image, int div = 64) { 
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     Mat hsv;
     cvtColor(image, hsv, CV_BGR2HSV);
@@ -328,7 +323,7 @@ Mat colorReduce2(Mat image, int div = 64) { //Version Aron, HVS
 
 }
 
-void calcCorrector(Mat m) { //Distancia del pixel al centro
+void calcCorrector(Mat m) { 
     cof = cof > 255 ? 255 : cof;
     cof = cof < 0 && cof < -0.25 ? -0.25 : cof;
     int Cx = m.cols / 2, Cy = m.rows / 2;
@@ -376,46 +371,32 @@ Mat procesar(Mat image) {
     }
 }
 
-/*
- * Basado en http://awesomebytes.com/2011/03/16/dibujando-un-histograma-de-una-imagen-en-opencv/
- */
-IplImage* create_histogram_image(Mat bgrMap)
+
+Mat create_histogram_image(Mat bgrMap)
 {
-  bgrMap.convertTo(bgrMap,16);
-  IplImage imag = bgrMap;IplImage *image=&imag;
-  IplImage* img = cvCreateImage( cvGetSize(image), IPL_DEPTH_8U, 1 );
-  if(bgrMap.type()==16){ // Solo aplica escala de grises si no se ha aplicado antes
-  	cvCvtColor( image, img, CV_BGR2GRAY );
-  }
-  IplImage *hist_img = cvCreateImage(cvSize(300,240), 8, 1);
-  cvSet( hist_img, cvScalarAll(255), 0 );
-  CvHistogram *hist;
 
   int hist_size = 256;
-  float range[]={0,256};
-  float* ranges[] = { range };
+  float range[]={0,255};
+  const float* ranges[] = { range };
   float max_value = 0.0, min_value = 0.0;
   float w_scale = 0.0;
+  
+  cvtColor(bgrMap, bgrMap, CV_BGR2GRAY);
 
-  hist = cvCreateHist(1, &hist_size, CV_HIST_ARRAY, ranges, 1);
+  int bin_w = cvRound( (double) bgrMap.cols/hist_size );
+  Mat hist,histImage( bgrMap.rows, bgrMap.cols, CV_8UC3, Scalar( 0,0,0) );
 
-  cvCalcHist( &img, hist, 0, NULL );
+  calcHist( &bgrMap, 1, 0, Mat(), hist, 1, &hist_size, ranges, true, false );
+  normalize(hist, hist, 0, histImage.rows, NORM_MINMAX, -1, Mat() );
 
-  cvGetMinMaxHistValue( hist, &min_value, &max_value);
-
-  cvScale( hist->bins, hist->bins, ((float)hist_img->height)/max_value, 0 );
-
-  w_scale = ((float)hist_img->width)/hist_size;
-
-  for( int i = 0; i < hist_size; i++ )
-  {
-    cvRectangle( hist_img, cvPoint((int)i*w_scale , hist_img->height),
-	             cvPoint((int)(i+1)*w_scale, hist_img->height - cvRound(cvGetReal1D(hist->bins,i))),
-	             cvScalar(0), -1, 8, 0 );
+  for(int i = 0; i < hist_size; i++ ){
+        line( histImage, Point( bin_w*(i-1), bgrMap.rows - cvRound(hist.at<float>(i-1)) ) ,
+                       Point( bin_w*(i), bgrMap.rows - cvRound(hist.at<float>(i)) ),
+                       Scalar( 255, 255, 255), 2, 8, 0  );
   }
-
-  return hist_img;
+  return histImage;
 }
+
 int main(int argc, char *argv[]) {
     alpha = 1;
     beta = 0;
@@ -426,7 +407,6 @@ int main(int argc, char *argv[]) {
     char key = 0;
     int numSnapshot = 0;
     std::string snapshotFilename = "0";
-
     std::cout << "Pulsa 'espacio' para hacer una captura" << std::endl;
     std::cout << "Pulsa '+' para aumentar contraste" << std::endl;
     std::cout << "Pulsa '-' para disminuir contraste" << std::endl;
@@ -434,47 +414,52 @@ int main(int argc, char *argv[]) {
     std::cout << "Pulsa 'c' para activar/desctivar filtro de reduccion de colores" << std::endl;
     std::cout << "Pulsa 'a' para activar/desctivar alineacion" << std::endl;
     std::cout << "Pulsa 'n' para activar/desctivar filtro negativos" << std::endl;
+    std::cout << "Pulsa 'm' para cambiar de modo" << std::endl;
     std::cout << "Pulsa 'i' para activar/desctivar invetir imagen" << std::endl;
     std::cout << "Pulsa 'r' para activar/desctivar reduccion de ruido" << std::endl;
     std::cout << "Pulsa 'v' para activar/desctivar modo binario" << std::endl;
+    std::cout << "Pulsa 'b' para activar/desctivar modo distorsion" << std::endl;
     std::cout << "Pulsa 'escape' para salir" << std::endl;
    
 
 
-    Mat bgrMap,New;
+    Mat bgrMap,captura;
     vector<Vec3b> blackAndWhite(2);
     blackAndWhite.at(0)=black;blackAndWhite.at(1)=white;
-    /// Create Windows
+
     namedWindow("BGR image",  WINDOW_KEEPRATIO);
     namedWindow("Nueva Imagen",  WINDOW_KEEPRATIO);
     namedWindow("Histograma original", WINDOW_KEEPRATIO);
     namedWindow("Histograma destino", WINDOW_KEEPRATIO);
      std::string arg = argc>1?argv[1]:"0";
-    VideoCapture TheVideoCapturer(arg); 
 
-    if (!TheVideoCapturer.isOpened()) //if this fails, try to open as a video camera, through the use of an integer param
-        TheVideoCapturer.open(atoi(arg.c_str()));
-    if (!TheVideoCapturer.isOpened()) {
-        std::cerr << "Could not open video" << std::endl;
-        return -1;
-    }
-    TheVideoCapturer >> New;
-    if (New.empty()){
+    captura = imread(arg, CV_LOAD_IMAGE_COLOR); 
+    VideoCapture TheVideoCapturer(arg);
+    if (captura.empty()&&!TheVideoCapturer.isOpened()) 
+           {
+			TheVideoCapturer.open(atoi(arg.c_str()));
+	   }
+           
+    if (!TheVideoCapturer.isOpened()&&captura.empty()) {
  	std::cerr << "Could not open file " << arg << std::endl;
         return -1;
-    }else{
-    	bgrMap=New.clone();
     }
-    while (key != 27 && (arg!="0" || TheVideoCapturer.grab())) {
-        TheVideoCapturer >> New;
-	if (!New.empty()){bgrMap=New;}
+    if (!captura.empty()){
+    	bgrMap=captura;
+    }
+    while (key != 27 && (!captura.empty() || TheVideoCapturer.grab())) {
+        if(captura.empty()){TheVideoCapturer >> bgrMap;}  //Se esta usando una camara
         switch (filtro) {
             case 1:
                 NuevaImagen = eculizarHistograma(procesar(bgrMap));
                 break;
 
             case 2:
-                NuevaImagen = colorReduce(procesar(bgrMap));
+                if(posterMode==0){
+                	NuevaImagen = colorReduce(procesar(bgrMap));
+                }else{
+                	NuevaImagen = colorReduce2(procesar(bgrMap));
+                }
                 break;
             case 3:
                 switch (alienMode){
@@ -512,11 +497,11 @@ int main(int argc, char *argv[]) {
         imshow("BGR image", bgrMap); //Muestra por pantalla
         imshow("Nueva Imagen", NuevaImagen);
 
-  	IplImage *hist_img = create_histogram_image(bgrMap);
-  	cvShowImage( "Histograma original", hist_img );
+  	Mat hist_img = create_histogram_image(bgrMap);
+  	imshow( "Histograma original", hist_img );
 
-  	IplImage *hist_img2 = create_histogram_image(NuevaImagen);
-  	cvShowImage( "Histograma destino", hist_img2 );
+  	Mat hist_img2 = create_histogram_image(NuevaImagen);
+  	imshow( "Histograma destino", hist_img2 );
 
         switch (key) { //Códigos aqui http://www.asciitable.com/
 
@@ -606,7 +591,10 @@ int main(int argc, char *argv[]) {
                 } else if(filtro == 3){
                     alienMode=alienMode>=3?0:(alienMode+1);
                     std::cout << "Modo alien " << alienMode << std::endl;
-		}else{
+		} if (filtro == 2) {
+		    posterMode=posterMode>=1?0:(posterMode+1);
+                    std::cout << "Modo poster " << posterMode << std::endl;
+		}else{		
                     if (test) {
                         std::cout << "Modo contraste cambiado" << std::endl;
                         test = false;
