@@ -15,7 +15,7 @@
 using namespace cv;
 using namespace std;
 
-bool test = true,noise = false;
+bool test = true,noise = false,rgbH=false,rgbHE=true;
 double alpha, beta; 
 float cof = 1;
 float correctorX = 1.33, correctorY = 1.33;
@@ -60,6 +60,9 @@ Mat contrasteHSI(Mat image) {
     return nuevaImagen;
 }
 
+/*
+ * Efecto barril
+ */
 Mat distorsion(Mat imagen, double Cx, double Cy, double kx, double ky) {
     Mat dst = Mat::zeros(imagen.size(), imagen.type());
     Mat mapx = Mat::zeros(imagen.size(), CV_32FC1);
@@ -72,7 +75,7 @@ Mat distorsion(Mat imagen, double Cx, double Cy, double kx, double ky) {
         for (int x = 0; x < w; x++) {
             int tx = x - Cx;
             float rt = sqrt(tx * tx + ty * ty) / rTot;
-            mapx.at<float>(y, x) = (float) (tx * (1 + kx * rt * rt) * correctorX + Cx);
+            mapx.at<float>(y, x) = (float) (tx * (1 + kx * rt * rt) * correctorX + Cx);  //x=tx*()
             mapy.at<float>(y, x) = (float) (ty * (1 + ky * rt * rt) * correctorY + Cy);
         }
     }
@@ -80,30 +83,33 @@ Mat distorsion(Mat imagen, double Cx, double Cy, double kx, double ky) {
     return dst;
 }
 
+/*
+ * Rangos de detecion de piel a partir de los valores RGB del pixel
+ */
 bool R1(int R, int G, int B) { //Mismos cooeficientes RGB
     bool e1 = (R > 95) && (G > 40) && (B > 20) ;//&& ((max(R, max(G, B)) - min(R, min(G, B))) > 15) && (abs(R - G) > 15) && (R > G) && (R > B);
     bool e2 = (R > 220) && (G > 210) && (B > 170) ;//&& (abs(R - G) <= 15) && (R > B) && (G > B);
     return (e1 || e2);
 }
 
-bool R2(float Y, float Cr, float Cb) { //Coenficientes YCrCb
-    bool e3 = Cr <= 1.5862 * Cb + 20;
-    bool e4 = Cr >= 0.3448 * Cb + 76.2069;
-    bool e5 = Cr >= -4.5652 * Cb + 234.5652;
-    bool e6 = Cr <= -1.15 * Cb + 301.75;
-    bool e7 = Cr <= -2.2857 * Cb + 432.85;
-    return e3 && e4 && e5 && e6 && e7;
-}
-
-bool R2A(float Y, float Cr, float Cb) { //Coenficientes YCrCb
+/*
+ * Rangos de detecion de piel a partir de los valores YCrCb del pixel
+ */
+bool R2(float Y, float Cr, float Cb) { 
     return ((Y > 80) && ((Cb > 85) || (Cr < 135)) && ((Cr > 135) || (Cr < 180)));
 }
 
-bool R3(float H, float S, float V) { //Coeficientes HSV
+/*
+ * Rangos de detecion de piel a partir de los valores HSV del pixel
+ */
+bool R3(float H, float S, float V) {
     //return (H < 25) || (H > 230);
     return (((H < 25) || (H > 230)) && ((S > 10) || (S < 150)) && (V > 60));
 }
 
+/*
+ * Efecto alien con deteccion de piel con RGB, YCrCb y HSV
+ */
 Mat alinenacion(Mat src) {
     Mat dst = src.clone();
 
@@ -126,7 +132,7 @@ Mat alinenacion(Mat src) {
             int Y = pix_ycrcb.val[0];
             int Cr = pix_ycrcb.val[1];
             int Cb = pix_ycrcb.val[2];
-            bool b = R2A(Y, Cr, Cb);
+            bool b = R2(Y, Cr, Cb);
 
             Vec3f pix_hsv = src_hsv.ptr<Vec3f>(i)[j];
             float H = pix_hsv.val[0];
@@ -141,7 +147,10 @@ Mat alinenacion(Mat src) {
     return dst;
 }
 
-Mat alien(Mat image) { //Detectar piel escala RGB
+/*
+ * Efecto alien con deteccion de piel con RGB
+ */
+Mat alien(Mat image) {
     Mat nuevaImagen = image.clone();
     int R, G, B;
     for (int y = 0; y < image.rows; y++) {
@@ -158,8 +167,10 @@ Mat alien(Mat image) { //Detectar piel escala RGB
     return nuevaImagen;
 }
 
-
-Mat alien2(Mat image) { //Detectar piel  YCrCb
+/*
+ * Efecto alien con deteccion de piel con YCrCb
+ */
+Mat alien2(Mat image) {
     Mat src_ycrcb;
     cvtColor(image, src_ycrcb, CV_BGR2YCrCb);
     Mat nuevaImagen = image.clone();
@@ -171,7 +182,7 @@ Mat alien2(Mat image) { //Detectar piel  YCrCb
             Cr = src_ycrcb.at<Vec3b>(y, x)[1];
             Cb = src_ycrcb.at<Vec3b>(y, x)[2];
 
-            if (R2A(Y, Cr, Cb)) {
+            if (R2(Y, Cr, Cb)) {
                 nuevaImagen.at<Vec3b>(y, x)[0] = 1;
                 nuevaImagen.at<Vec3b>(y, x)[1] = 200;
                 nuevaImagen.at<Vec3b>(y, x)[2] = 1;
@@ -181,14 +192,16 @@ Mat alien2(Mat image) { //Detectar piel  YCrCb
     return nuevaImagen;
 }
 
-Mat alien3(Mat imagen) { //Detectar piel escala HSV
+/*
+ * Efecto alien con deteccion de piel con HSV
+ */
+Mat alien3(Mat imagen) {
     Mat hsv;
     imagen.convertTo(hsv, CV_32FC3);
     cvtColor(hsv, hsv, CV_BGR2HSV);
     normalize(hsv, hsv, 0.0, 255.0, NORM_MINMAX, CV_32FC3);
 
     Mat dst=imagen.clone();
-    //inRange(hsv, Scalar(0, 40, 60), Scalar(20, 150, 255), bw);
     for (int i = 0; i < imagen.rows; i++) {
         for (int j = 0; j < imagen.cols; j++) {
 
@@ -203,13 +216,13 @@ Mat alien3(Mat imagen) { //Detectar piel escala HSV
     }
     return dst;
 }
+
+/*
+ * Filtro de ruido
+ */
 Mat removeNoise(Mat src) {
     Mat dst = src.clone();
-    int v[3][3] = {
-        {1, 2, 1},
-        {2, 4, 2},
-        {1, 2, 1}
-    };
+    int v[3][3] = {{1, 2, 1},{2, 4, 2},{1, 2, 1} };
     //int v[5][5]={{1,4,6,4,1},{4,16,24,16,4},{6,24,36,24,6},{4,16,24,16,4},{1,4,6,4,1}};
     int m = 0;
     size_t r = sizeof (*v) / sizeof (*v[0]), c = r;
@@ -220,7 +233,6 @@ Mat removeNoise(Mat src) {
     }
 
     int cr = r / 2, cc = c / 2;
-    //printf("%i\n",cr);
 
     for (int i = cr; i < src.rows - cr; i++) {
         for (int j = cc; j < src.cols - cc; j++) {
@@ -241,6 +253,9 @@ Mat removeNoise(Mat src) {
     return dst;
 }
 
+/*
+ * Invierte la imagen
+ */
 Mat invertir(Mat imagen) {
     Mat mapx, mapy, dst;
 
@@ -262,6 +277,9 @@ Mat invertir(Mat imagen) {
     return dst;
 }
 
+/*
+ * Devuelve el negativo de la imagen
+ */
 Mat negativo(Mat image) {
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
 
@@ -276,25 +294,38 @@ Mat negativo(Mat image) {
     return nuevaImagen;
 }
 
+/*
+ * Ecualiza la imagen tras convertirla en escala de grises
+ */
 Mat eculizarHistograma(Mat image) {
     Mat nuevaImagen;
     cvtColor(image, image, CV_BGR2GRAY);
-    equalizeHist(image, nuevaImagen); //No funciona con rgb
-
+    equalizeHist(image, nuevaImagen); 
     return nuevaImagen;
 }
 
-Mat cambiarEscalaColores(Mat image) {
-    cvtColor(image, image, CV_BGR2Lab);
-
-    return image;
+/*
+ * Ecualiza la imagen
+ */
+Mat eculizarHistogramaRGB(Mat image) {
+    Mat nuevaImagen;
+    vector<Mat> bgr;
+    split( image, bgr );  //Separa una imagen en capas
+    equalizeHist(bgr[0], bgr[0]); 
+    equalizeHist(bgr[1], bgr[1]); 
+    equalizeHist(bgr[2], bgr[2]); 
+    merge(bgr,nuevaImagen); //Une las capas tras ecualizar sus niveles
+    return nuevaImagen;
 }
 
+/*
+ * Efecto poster con RGB
+ */
 Mat efectoPoster(Mat image, int div = 64) { 
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
-            for (int c = 0; c < 3; c++) { //RGB
+            for (int c = 0; c < 3; c++) { 
 
                 nuevaImagen.at<Vec3b>(y, x)[c] =
                         saturate_cast<uchar>((image.at<Vec3b>(y, x)[c]) / div * div + div / 2);
@@ -305,6 +336,9 @@ Mat efectoPoster(Mat image, int div = 64) {
 
 }
 
+/*
+ * Efecto poster modificando el brillo en el modelo HSV
+ */
 Mat efectoPoster2(Mat image, int div = 64) { 
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
     Mat hsv;
@@ -323,6 +357,9 @@ Mat efectoPoster2(Mat image, int div = 64) {
 
 }
 
+/*
+ * Calcula los coeficientes de correcion para ajustar la imagen a la maxima resolucion
+ */
 void calcCorrector(Mat m) { 
     cof = cof > 255 ? 255 : cof;
     cof = cof < 0 && cof < -0.25 ? -0.25 : cof;
@@ -342,6 +379,9 @@ void calcCorrector(Mat m) {
     }
 }
 
+/*
+ * Permite aplicar el efecto binario
+ */
 Mat effectVector(Mat src,vector<Vec3b> colors){
    	 cv::Mat dst = cv::Mat::zeros(src.size(), CV_8UC3);
    	 int bsize = 1;
@@ -360,6 +400,9 @@ Mat effectVector(Mat src,vector<Vec3b> colors){
 	return dst;
     }
 
+/*
+ * Realiza el preprocesamiento
+ */
 Mat procesar(Mat image) {
     
     if (test) {
@@ -373,7 +416,9 @@ Mat procesar(Mat image) {
     return image;
 }
 
-
+/*
+ * Devuelve el histograma de grises de una imagen
+ */
 Mat create_histogram_image(Mat bgrMap)
 {
 
@@ -400,20 +445,65 @@ Mat create_histogram_image(Mat bgrMap)
   return histImage;
 }
 
+/*
+ * Devuelve el histograma con los valores RGB de una imagen
+ * Basado en http://docs.opencv.org/doc/tutorials/imgproc/histograms/histogram_calculation/histogram_calculation.html
+ */
+Mat create_histogram_image_rgb(Mat bgrMap)
+{
+  Mat histImage( bgrMap.rows, bgrMap.cols, CV_8UC3, Scalar( 0,0,0) );
+  if(bgrMap.type()==0){ // No muestra nada si esta en escala de grises 
+  	return histImage;
+  }
+  int hist_size = 256;
+  float range[]={0,256};
+  const float* ranges[] = { range };
+  float max_value = 0.0, min_value = 0.0;
+  float w_scale = 0.0;
+  vector<Mat> bgr;
+  split( bgrMap, bgr );  //Separa una imagen en capas
+
+
+  int bin_w = cvRound( (double) bgrMap.cols/hist_size );
+
+  Mat r,g,b;
+  calcHist( &bgr[0], 1, 0, Mat(), b, 1, &hist_size, ranges, true, false );
+  normalize(b, b, 0, bgrMap.rows, NORM_MINMAX, -1, Mat() );
+  
+  calcHist( &bgr[1], 1, 0, Mat(), g, 1, &hist_size, ranges, true, false );
+  normalize(g, g, 0, bgrMap.rows, NORM_MINMAX, -1, Mat() );
+  
+  calcHist( &bgr[2], 1, 0, Mat(), r, 1, &hist_size, ranges, true, false );
+  normalize(r, r, 0, bgrMap.rows, NORM_MINMAX, -1, Mat() );
+  
+  for(int i = 0; i < hist_size; i++ ){
+        line( histImage, Point( bin_w*(i-1), histImage.rows - cvRound(r.at<float>(i-1)) ) ,
+                       Point( bin_w*(i), histImage.rows - cvRound(r.at<float>(i)) ),
+                       Scalar( 255, 0, 0), 2, 8, 0  );
+	line( histImage, Point( bin_w*(i-1), histImage.rows - cvRound(g.at<float>(i-1)) ) ,
+                       Point( bin_w*(i), histImage.rows - cvRound(g.at<float>(i)) ),
+                       Scalar( 0,255, 0), 2, 8, 0  );
+	line( histImage, Point( bin_w*(i-1), histImage.rows - cvRound(b.at<float>(i-1)) ) ,
+                       Point( bin_w*(i), histImage.rows - cvRound(b.at<float>(i)) ),
+                       Scalar( 0, 0, 255), 2, 8, 0  );
+  }
+  return histImage;
+}
+
+/*
+ * Main principal
+ */
 int main(int argc, char *argv[]) {
     alpha = 1;
     beta = 0;
     filtro = 0;
-
-    Mat NuevaImagen;
-
     char key = 0;
     int numSnapshot = 0;
     std::string snapshotFilename = "0";
     std::cout << "Pulsa 'espacio'para hacer una captura" << std::endl;
     std::cout << "Pulsa '+' para aumentar contraste" << std::endl;
     std::cout << "Pulsa '-' para disminuir contraste" << std::endl;
-    std::cout << "Pulsa 'g' para activar/desactivar ecualizacion de histograma" << std::endl;
+    std::cout << "Pulsa 'e' para activar/desactivar ecualizacion de histograma" << std::endl;
     std::cout << "Pulsa 'c' para activar/desactivar filtro poster" << std::endl;
     std::cout << "Pulsa 'a' para activar/desactivar efecto alien" << std::endl;
     std::cout << "Pulsa 'n' para activar/desactivar filtro negativos" << std::endl;
@@ -422,26 +512,28 @@ int main(int argc, char *argv[]) {
     std::cout << "Pulsa 'r' para activar/desactivar reduccion de ruido" << std::endl;
     std::cout << "Pulsa 'v' para activar/desactivar modo binario" << std::endl;
     std::cout << "Pulsa 'b' para activar/desactivar modo distorsion" << std::endl;
+    std::cout << "Pulsa 'h' para cambiar el tipo de histograma" << std::endl;
     std::cout << "Pulsa 'escape' para salir" << std::endl;
-   
 
-
-    Mat bgrMap,captura;
+    Mat bgrMap,captura,NuevaImagen;
     vector<Vec3b> blackAndWhite(2);
     blackAndWhite.at(0)=black;blackAndWhite.at(1)=white;
 
+    //Inicializa las ventanas
     namedWindow("BGR image",  WINDOW_KEEPRATIO);
     namedWindow("Nueva Imagen",  WINDOW_KEEPRATIO);
     namedWindow("Histograma original", WINDOW_KEEPRATIO);
     namedWindow("Histograma destino", WINDOW_KEEPRATIO);
-     std::string arg = argc>1?argv[1]:"0";
 
-    captura = imread(arg, CV_LOAD_IMAGE_COLOR); 
+
+     std::string arg = argc>1?argv[1]:"0";   
+
+    captura = imread(arg, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
     VideoCapture TheVideoCapturer(arg);
     if (captura.empty()&&!TheVideoCapturer.isOpened()) 
-           {
-			TheVideoCapturer.open(atoi(arg.c_str()));
-	   }
+        {
+		TheVideoCapturer.open(atoi(arg.c_str())); //Abre la videocamara
+	}
            
     if (!TheVideoCapturer.isOpened()&&captura.empty()) {
  	std::cerr << "Could not open file " << arg << std::endl;
@@ -451,10 +543,16 @@ int main(int argc, char *argv[]) {
     	bgrMap=captura;
     }
     while (key != 27 && (!captura.empty() || TheVideoCapturer.grab())) {
-        if(captura.empty()){TheVideoCapturer >> bgrMap;}  //Se esta usando una camara
+        if(captura.empty()){ //Se esta usando una camara
+        	TheVideoCapturer >> bgrMap;
+        }  
         switch (filtro) {
             case 1:
-                NuevaImagen = eculizarHistograma(procesar(bgrMap));
+		if(rgbHE){                
+			NuevaImagen = eculizarHistogramaRGB(procesar(bgrMap));
+		}else{
+			NuevaImagen = eculizarHistograma(procesar(bgrMap));
+		}
                 break;
 
             case 2:
@@ -499,19 +597,28 @@ int main(int argc, char *argv[]) {
 
         imshow("BGR image", bgrMap); //Muestra por pantalla
         imshow("Nueva Imagen", NuevaImagen);
+	Mat histogram_O,histogram_N;
 
-  	Mat hist_img = create_histogram_image(bgrMap);
-  	imshow( "Histograma original", hist_img );
+	if(rgbH){
+		histogram_O=create_histogram_image_rgb(bgrMap);
+		histogram_N=create_histogram_image_rgb(NuevaImagen);
+	}else{
+		histogram_O=create_histogram_image(bgrMap);
+		histogram_N=create_histogram_image(NuevaImagen);
+	}
+  	imshow( "Histograma original", histogram_O );
 
-  	Mat hist_img2 = create_histogram_image(NuevaImagen);
-  	imshow( "Histograma destino", hist_img2 );
+
+  	imshow( "Histograma destino", histogram_N );
 
         switch (key) { //Códigos aqui http://www.asciitable.com/
 
             case 32: //space
                 std::cout << "Imagen guardada "<< snapshotFilename << ".png" << std::endl;
-
-                imwrite(snapshotFilename + ".png", NuevaImagen);
+                imwrite(snapshotFilename + "_N.png", NuevaImagen);
+                imwrite(snapshotFilename + "_O.png", bgrMap);
+                imwrite(snapshotFilename + "_HN.png", histogram_N);
+                imwrite(snapshotFilename + "_HO.png", histogram_O);
                 numSnapshot++;
                 snapshotFilename = static_cast<std::ostringstream*> (&(std::ostringstream() << numSnapshot))->str();
                 break;
@@ -540,7 +647,7 @@ int main(int argc, char *argv[]) {
                     std::cout << cof << std::endl;
                 }
                 break;
-            case 103: //g
+            case 101: //e
                 if (filtro != 1) {
                     std::cout << "Ecualizacion de histograma Activada" << std::endl;
                     filtro = 1;
@@ -594,10 +701,17 @@ int main(int argc, char *argv[]) {
                 } else if(filtro == 3){
                     alienMode=alienMode>=3?0:(alienMode+1);
                     std::cout << "Modo alien " << alienMode << std::endl;
-		} if (filtro == 2) {
+		} else if (filtro == 2) {
 		    posterMode=posterMode>=1?0:(posterMode+1);
                     std::cout << "Modo poster " << posterMode << std::endl;
-		}else{		
+		} else if (filtro == 1) {
+		    if (rgbHE) {
+                        std::cout << "Modo ecualizacion de histograma con grises" << std::endl;
+                    } else {
+                        std::cout << "Modo ecualizacion de histograma RGB" << std::endl;
+		    }
+		    rgbHE=!rgbHE;                    
+		} else {		
                     if (test) {
                         std::cout << "Modo contraste cambiado" << std::endl;
                         test = false;
@@ -633,6 +747,15 @@ int main(int argc, char *argv[]) {
                     std::cout << "Modo binario Desactivado" << std::endl;
                     filtro = 0;
                 }
+                break;
+           case 104://h
+                if (rgbH) {
+                    std::cout << "Histograma modo grises" << std::endl;
+
+                } else {
+                    std::cout << "Histograma modo rgb" << std::endl;
+                }
+                rgbH = !rgbH;
                 break;
         }
 
