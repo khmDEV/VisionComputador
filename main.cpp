@@ -5,19 +5,18 @@
 #include <sstream>
 #include "opencv2/imgproc/imgproc_c.h"
 #include "opencv2/imgproc/imgproc.hpp"
+#include <stdio.h>
 
 using namespace cv;
+using namespace std;
 
-VideoCapture TheVideoCapturer;
-Mat bgrMap;
-
-bool test = true;
-bool noise = false;
-double alpha; /**< Simple contrast control */
-int beta; /**< Simple brightness control*/
+bool test = true,noise = false;
+double alpha, beta; 
 float cof = 1;
 float correctorX = 1.33, correctorY = 1.33;
-int filtro,alienMode=0; // 0-Nornal, 1- Filtro de grises, 2-Escala de colores,3-Filtro alienacion, 4- Filtro Negativo
+int filtro, // 0-Nornal, 1- Filtro de grises, 2-Escala de colores,3-Filtro alienacion, 4- Filtro Negativo
+	alienMode=0;
+const Vec3b black(0, 0, 0),white(255, 255, 255),green = (0, 0, 255);
 
 Mat contrasteRGB(Mat image) {
     Mat nuevaImagen = Mat::zeros(image.size(), image.type());
@@ -71,76 +70,6 @@ Mat barrel(Mat imagen, double Cx, double Cy, double kx, double ky) {
     return dst;
 }
 
-Mat barrel_pincusion_dist(Mat imagen, double Cx, double Cy, double kx, double ky) { //Codigo original
-    IplImage img = imagen;
-    //cvCreateImage(Tamaño, profundidad bit,channels)
-    IplImage* mapx = cvCreateImage(cvGetSize(&img), IPL_DEPTH_32F, 1); //Why un channel??
-    IplImage* mapy = cvCreateImage(cvGetSize(&img), IPL_DEPTH_32F, 1);
-
-    int w = img.width;
-    int h = img.height;
-
-    //std::cout << "Fallo al convertir" << std::endl;
-
-    float* pbuf = (float*) mapx->imageData;
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            float u = Cx + (x - Cx)*(1 + kx * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
-            *pbuf = u;
-            ++pbuf;
-        }
-    }
-    //std::cout << "Fallo en el primer bucle" << std::endl;
-
-    pbuf = (float*) mapy->imageData;
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            *pbuf = Cy + (y - Cy)*(1 + ky * ((x - Cx)*(x - Cx)+(y - Cy)*(y - Cy)));
-            ++pbuf;
-        }
-    }
-
-    // std::cout << "Fallo en el segundo bucle" << std::endl;
-
-    /*float* pbuf = (float*)mapx->imageData;
-    for (int y = 0; y < h; y++)
-    {
-        int ty= y-Cy;
-        for (int x = 0; x < w; x++)
-        {
-            int tx= x-Cx;
-            int rt= tx*tx+ty*ty;
-
-     *pbuf = (float)(tx*(1+kx*rt)+Cx);
-            ++pbuf;
-        }
-    }
-
-    pbuf = (float*)mapy->imageData;
-    for (int y = 0;y < h; y++)
-    {
-        int ty= y-Cy;
-        for (int x = 0; x < w; x++) 
-        {
-            int tx= x-Cx;
-            int rt= tx*tx+ty*ty;
-
-     *pbuf = (float)(ty*(1+ky*rt)+Cy);
-            ++pbuf;
-        }
-    }*/
-
-    IplImage* temp = cvCloneImage(&img);
-    cvRemap(temp, &img, mapx, mapy);
-    cvReleaseImage(&temp);
-    cvReleaseImage(&mapx);
-    cvReleaseImage(&mapy);
-
-    Mat image = cvarrToMat(&img);
-    return image;
-
-}
-
 bool R1(int R, int G, int B) { //Mismos cooeficientes RGB
     bool e1 = (R > 95) && (G > 40) && (B > 20) ;//&& ((max(R, max(G, B)) - min(R, min(G, B))) > 15) && (abs(R - G) > 15) && (R > G) && (R > B);
     bool e2 = (R > 220) && (G > 210) && (B > 170) ;//&& (abs(R - G) <= 15) && (R > B) && (G > B);
@@ -168,7 +97,6 @@ bool R3(float H, float S, float V) { //Coeficientes HSV
 Mat alien(Mat image) { //Detectar piel escala RGB
     Mat nuevaImagen = image.clone();
     int R, G, B;
-    Vec3b cgreen = (0, 0, 255);
     for (int y = 0; y < image.rows; y++) {
         for (int x = 0; x < image.cols; x++) {
             R = image.at<Vec3b>(y, x)[0];
@@ -176,7 +104,7 @@ Mat alien(Mat image) { //Detectar piel escala RGB
             B = image.at<Vec3b>(y, x)[2];
 
             if (R1(R, G, B)) {
-                nuevaImagen.ptr<Vec3b>(y)[x] = cgreen;
+                nuevaImagen.ptr<Vec3b>(y)[x] = green;
             }
         }
     }
@@ -213,7 +141,6 @@ Mat alien3(Mat imagen) { //Detectar piel escala HSV
     normalize(hsv, hsv, 0.0, 255.0, NORM_MINMAX, CV_32FC3);
 
     Mat dst=imagen.clone();
-    Vec3b cgreen = (0, 0, 255);
     //inRange(hsv, Scalar(0, 40, 60), Scalar(20, 150, 255), bw);
     for (int i = 0; i < imagen.rows; i++) {
         for (int j = 0; j < imagen.cols; j++) {
@@ -223,7 +150,7 @@ Mat alien3(Mat imagen) { //Detectar piel escala HSV
             float S = pix_hsv.val[1];
             float V = pix_hsv.val[2];
 	    if(R3(H, S, V)){
-                dst.ptr<Vec3b>(i)[j] = cgreen;
+                dst.ptr<Vec3b>(i)[j] = green;
 	    }
 	}
     }
@@ -271,10 +198,6 @@ Mat alinenacion(Mat const &src) {
     // allocate the result matrix
     Mat dst = src.clone();
 
-    Vec3b cwhite = Vec3b::all(255);
-    Vec3b cblack = Vec3b::all(0);
-    Vec3b cgreen = (0, 0, 255);
-
     Mat src_ycrcb, src_hsv;
     // OpenCV scales the YCrCb components, so that they
     // cover the whole value range of [0,255], so there's
@@ -315,7 +238,7 @@ Mat alinenacion(Mat const &src) {
 
            if ((a && b && c))
                // if ((c))
-                dst.ptr<Vec3b>(i)[j] = cgreen;
+                dst.ptr<Vec3b>(i)[j] = green;
         }
     }
     return dst;
@@ -411,7 +334,6 @@ void calcCorrector(Mat m) { //Distancia del pixel al centro
     int Cx = m.cols / 2, Cy = m.rows / 2;
     double rTot = sqrt(Cx * Cx + Cy * Cy);
     float rtt = Cx / rTot;
-    float ca, cb; //No se usa??
     if ((cof)<(cof * rtt * rtt)) {
         correctorX = 1 / (1 + cof);
     } else {
@@ -425,6 +347,24 @@ void calcCorrector(Mat m) { //Distancia del pixel al centro
     }
 }
 
+Mat effectVector(Mat src,vector<Vec3b> colors){
+   	 cv::Mat dst = cv::Mat::zeros(src.size(), CV_8UC3);
+   	 int bsize = 1;
+	 int vol=(255*3)/colors.size();
+	 for (int i = 0; i < src.rows; i += bsize)
+    	 {
+        	for (int j = 0; j < src.cols; j += bsize)
+        	{
+			Vec3f p=src.at<Vec3b>(i,j);
+		    	double val=p[0]+p[1]+p[2];
+			int c=val/vol;
+			dst.at<Vec3b>(i,j)=colors.at(c);
+		}
+	}
+	
+	return dst;
+    }
+
 Mat procesar(Mat image) {
     if (noise) {
           image = removeNoise(image);
@@ -435,11 +375,13 @@ Mat procesar(Mat image) {
         return contrasteHSI(image);
     }
 }
+
 /*
- * Based in http://awesomebytes.com/2011/03/16/dibujando-un-histograma-de-una-imagen-en-opencv/
+ * Basado en http://awesomebytes.com/2011/03/16/dibujando-un-histograma-de-una-imagen-en-opencv/
  */
 IplImage* create_histogram_image(Mat bgrMap)
 {
+  bgrMap.convertTo(bgrMap,16);
   IplImage imag = bgrMap;IplImage *image=&imag;
   IplImage* img = cvCreateImage( cvGetSize(image), IPL_DEPTH_8U, 1 );
   if(bgrMap.type()==16){ // Solo aplica escala de grises si no se ha aplicado antes
@@ -472,7 +414,6 @@ IplImage* create_histogram_image(Mat bgrMap)
 	             cvScalar(0), -1, 8, 0 );
   }
 
-
   return hist_img;
 }
 int main(int argc, char *argv[]) {
@@ -486,30 +427,47 @@ int main(int argc, char *argv[]) {
     int numSnapshot = 0;
     std::string snapshotFilename = "0";
 
-    std::cout << "Press 's' to take snapshots" << std::endl;
-    std::cout << "Press 't' para aumentar contraste" << std::endl;
-    std::cout << "Press 'u' para disminuir contraste" << std::endl;
-    std::cout << "Press 'v' para activar/desctivar  filtro de grises" << std::endl;
-    std::cout << "Press 'r' para activar/desctivar filtro de reduccion de colores" << std::endl;
-    std::cout << "Press 'q' para activar/desctivar alineacion" << std::endl;
-    std::cout << "Press 'p' para activar/desctivar filtro negativos" << std::endl;
-    std::cout << "Press 'l' para activar/desctivar invetir imagen" << std::endl;
-    std::cout << "Press 'Esc' to exit" << std::endl;
+    std::cout << "Pulsa 'espacio' para hacer una captura" << std::endl;
+    std::cout << "Pulsa '+' para aumentar contraste" << std::endl;
+    std::cout << "Pulsa '-' para disminuir contraste" << std::endl;
+    std::cout << "Pulsa 'g' para activar/desctivar  filtro de grises" << std::endl;
+    std::cout << "Pulsa 'c' para activar/desctivar filtro de reduccion de colores" << std::endl;
+    std::cout << "Pulsa 'a' para activar/desctivar alineacion" << std::endl;
+    std::cout << "Pulsa 'n' para activar/desctivar filtro negativos" << std::endl;
+    std::cout << "Pulsa 'i' para activar/desctivar invetir imagen" << std::endl;
+    std::cout << "Pulsa 'r' para activar/desctivar reduccion de ruido" << std::endl;
+    std::cout << "Pulsa 'v' para activar/desctivar modo binario" << std::endl;
+    std::cout << "Pulsa 'escape' para salir" << std::endl;
+   
 
+
+    Mat bgrMap,New;
+    vector<Vec3b> blackAndWhite(2);
+    blackAndWhite.at(0)=black;blackAndWhite.at(1)=white;
     /// Create Windows
-    namedWindow("BGR image", 1);
-    namedWindow("Nueva Imagen", 1);
+    namedWindow("BGR image",  WINDOW_KEEPRATIO);
+    namedWindow("Nueva Imagen",  WINDOW_KEEPRATIO);
+    namedWindow("Histograma original", WINDOW_KEEPRATIO);
+    namedWindow("Histograma destino", WINDOW_KEEPRATIO);
+     std::string arg = argc>1?argv[1]:"0";
+    VideoCapture TheVideoCapturer(arg); 
 
-    TheVideoCapturer.open(0);
-
+    if (!TheVideoCapturer.isOpened()) //if this fails, try to open as a video camera, through the use of an integer param
+        TheVideoCapturer.open(atoi(arg.c_str()));
     if (!TheVideoCapturer.isOpened()) {
         std::cerr << "Could not open video" << std::endl;
         return -1;
     }
-
-    while (key != 27 && TheVideoCapturer.grab()) {
-        TheVideoCapturer.retrieve(bgrMap);
-
+    TheVideoCapturer >> New;
+    if (New.empty()){
+ 	std::cerr << "Could not open file " << arg << std::endl;
+        return -1;
+    }else{
+    	bgrMap=New.clone();
+    }
+    while (key != 27 && (arg!="0" || TheVideoCapturer.grab())) {
+        TheVideoCapturer >> New;
+	if (!New.empty()){bgrMap=New;}
         switch (filtro) {
             case 1:
                 NuevaImagen = eculizarHistograma(procesar(bgrMap));
@@ -544,6 +502,9 @@ int main(int argc, char *argv[]) {
             case 6:
                 NuevaImagen = invertir(procesar(bgrMap));
                 break;
+            case 7:
+            	NuevaImagen=effectVector(procesar(bgrMap),blackAndWhite);  
+                break;
             default:
                 NuevaImagen = procesar(bgrMap);
         }
@@ -557,16 +518,16 @@ int main(int argc, char *argv[]) {
   	IplImage *hist_img2 = create_histogram_image(NuevaImagen);
   	cvShowImage( "Histograma destino", hist_img2 );
 
-        switch (key) {
+        switch (key) { //Códigos aqui http://www.asciitable.com/
 
-            case 115: //s //Deshabilitado
-                std::cout << "Tomar Imagen" << std::endl;
+            case 32: //space
+                std::cout << "Imagen guardada "<< snapshotFilename << ".png" << std::endl;
 
                 imwrite(snapshotFilename + ".png", NuevaImagen);
                 numSnapshot++;
                 snapshotFilename = static_cast<std::ostringstream*> (&(std::ostringstream() << numSnapshot))->str();
                 break;
-            case 116: //t
+            case 45: //-
                 if (filtro != 5) {
                     if (alpha > 1) {
                         alpha -= 0.25;
@@ -579,7 +540,7 @@ int main(int argc, char *argv[]) {
                 }
                 break;
 
-            case 117: //u
+            case 43: //+
                 if (filtro != 5) {
                     if (alpha < 3) {
                         alpha += 0.25;
@@ -591,7 +552,7 @@ int main(int argc, char *argv[]) {
                     std::cout << cof << std::endl;
                 }
                 break;
-            case 118: //v
+            case 103: //g
                 if (filtro != 1) {
                     std::cout << "Escala de grises Activada" << std::endl;
                     filtro = 1;
@@ -600,7 +561,7 @@ int main(int argc, char *argv[]) {
                     filtro = 0;
                 }
                 break;
-            case 114: //r
+            case 99: //c
                 if (filtro != 2) {
                     std::cout << "Reduccion de colores Activada" << std::endl;
                     filtro = 2;
@@ -610,7 +571,7 @@ int main(int argc, char *argv[]) {
                 }
                 break;
 
-            case 113://q
+            case 97://a
                 if (filtro != 3) {
                     std::cout << "Alineanacion Activada" << std::endl;
                     filtro = 3;
@@ -619,7 +580,7 @@ int main(int argc, char *argv[]) {
                     filtro = 0;
                 }
                 break;
-            case 112://p
+            case 110://n
                 if (filtro != 4) {
                     std::cout << "Negativo Activada" << std::endl;
                     filtro = 4;
@@ -628,7 +589,7 @@ int main(int argc, char *argv[]) {
                     filtro = 0;
                 }
                 break;
-            case 111://o
+            case 98://b
                 if (filtro != 5) {
                     std::cout << "Barril Activado" << std::endl;
                     calcCorrector(bgrMap);
@@ -638,9 +599,9 @@ int main(int argc, char *argv[]) {
                     filtro = 0;
                 }
                 break;
-            case 110://n
+            case 109://m
                 if (filtro == 5) {
-                    cof = cof > 0 ? -0.25 : 1;
+                    cof = cof > 0 ? -0.25 : 0.5;
                     calcCorrector(bgrMap);
                 } else if(filtro == 3){
                     alienMode=alienMode>=3?0:(alienMode+1);
@@ -649,29 +610,36 @@ int main(int argc, char *argv[]) {
                     if (test) {
                         std::cout << "Modo contraste cambiado" << std::endl;
                         test = false;
-                        std::cout << cof << std::endl;
                     } else {
                         std::cout << "Modo contraste cambiado" << std::endl;
                         test = true;
                     }
                 }
                 break;
-            case 109://m
+            case 114://r
                 if (noise) {
-                    std::cout << "Modo eliminacion de ruido desactivado" << std::endl;
+                    std::cout << "Modo reduccion de ruido desactivado" << std::endl;
                     noise = false;
                 } else {
-                    std::cout << "Modo eliminacion de ruido activado" << std::endl;
+                    std::cout << "Modo reduccion de ruido activado" << std::endl;
                     noise = true;
                 }
                 break;
-            case 108://l
+            case 105://i
                 if (filtro != 6) {
                     std::cout << "Invetir Imagen Activado" << std::endl;
-                    calcCorrector(bgrMap);
                     filtro = 6;
                 } else {
                     std::cout << "Invetir Imagen Desactivado" << std::endl;
+                    filtro = 0;
+                }
+                break;
+           case 118://v
+                if (filtro != 7) {
+                    std::cout << "Modo binario Activado" << std::endl;
+                    filtro = 7;
+                } else {
+                    std::cout << "Modo binario Desactivado" << std::endl;
                     filtro = 0;
                 }
                 break;
