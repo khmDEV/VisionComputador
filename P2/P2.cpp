@@ -17,7 +17,9 @@ using namespace std;
 
 bool rgbH=false;
 typedef Mat (*Effect)(Mat);
-
+Scalar color=Scalar( 0, 255, 0);
+int font=FONT_HERSHEY_SIMPLEX;
+float thicknessFont=1;
 /*
  * Devuelve el histograma de grises de una imagen
  */
@@ -127,6 +129,7 @@ Mat removeNoise(Mat src) {
     return dst;
 }
 
+
 /*
  * Grises
  */
@@ -166,9 +169,16 @@ int main(int argc, char *argv[]) {
 
     Mat bgrMap,captura,NuevaImagen;
 
+    /*
+     * Calculate text proportion
+     */
+    Size fontSize=getTextSize("1", font, 1, thicknessFont, 0);
+    float scale=1.0/fontSize.width,MinSize=0.5;
+    cout << fontSize.width << " - " << scale << endl;
     //Inicializa las ventanas
     namedWindow("BGR image",  WINDOW_KEEPRATIO);
-    namedWindow("Nueva Imagen",  WINDOW_KEEPRATIO);
+    namedWindow("Imagen detencion",  WINDOW_KEEPRATIO);   
+    namedWindow("Contorno",  WINDOW_KEEPRATIO);
     namedWindow("Histograma original", WINDOW_KEEPRATIO);
     namedWindow("Histograma destino", WINDOW_KEEPRATIO);
     Effect binaryEffect=*Otsu,change=*adaptative;
@@ -193,9 +203,68 @@ int main(int argc, char *argv[]) {
         if(captura.empty()){ //Se esta usando una camara
         	TheVideoCapturer >> bgrMap;
         }  
-	NuevaImagen=binaryEffect(Grises(bgrMap));
+	NuevaImagen=bgrMap.clone();//removeNoise(NuevaImagen);
+	Mat binary=(binaryEffect(Grises(bgrMap)));
+
+	/*
+	 * Get Contors
+	 */
+	vector<vector<Point> > contours;
+  	vector<Vec4i> hierarchy;
+
+
+	findContours( binary, contours, hierarchy,CV_RETR_LIST, CV_CHAIN_APPROX_TC89_L1, Point(0, 0) );
+	
+	/*
+	 * Draw contours
+	 */
+   	RNG rng(12345);//rand()*1000);//
+  	Mat con = Mat::zeros( binary.size(), CV_8UC3 );
+   	for( int i = 0; i< contours.size(); i++ )
+    	 {
+		Scalar color = Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
+    		drawContours( con, contours, i, color, 2, 8, hierarchy, 0, Point() );
+    	}
+	imshow("Contorno", con);
+
+	/*
+	 * Calculate Moments
+	 */
+   	vector<Moments> mu(contours.size() );
+   	for( int i = 0; i < contours.size(); i++ )
+   	 { mu[i] = moments( contours[i], false ); }
+
+
+	/*
+	 * Identify objects
+	 */
+	char txt='1'; 
+	for( int i = 0; i < contours.size(); i++ ){
+		//Draw box
+		RotatedRect rect = minAreaRect(contours.at(i));
+		Point2f vertices[4];
+		rect.points(vertices);
+		for (int i = 0; i < 4; i++){
+   		 line(NuevaImagen, vertices[i], vertices[(i+1)%4], color);
+		}
+		//Draw text
+		Point2f point=vertices[0];
+		Mat txtMat=Mat::zeros( binary.size(), CV_8UC3 );
+
+		float ss=scale*rect.size.width;
+		putText(txtMat, &txt, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);
+		txt++;
+		float angle=abs((int)rect.angle)%180+(((int)rect.angle)-rect.angle);
+		//Rotate text
+   		Mat r = getRotationMatrix2D(point, angle, 1.0);
+    		cv::warpAffine(txtMat, txtMat, r, txtMat.size());
+		//NuevaImagen=NuevaImagen+txtMat;
+		txtMat.copyTo(NuevaImagen, txtMat);
+	}
+
         imshow("BGR image", bgrMap); //Muestra por pantalla
-        imshow("Nueva Imagen", NuevaImagen);
+        imshow("Imagen detencion", NuevaImagen);
+
 	Mat histogram_O,histogram_N;
 
 	if(rgbH){
@@ -214,6 +283,7 @@ int main(int argc, char *argv[]) {
                 std::cout << "Imagen guardada "<< snapshotFilename << ".png" << std::endl;
                 imwrite(snapshotFilename + "_N.png", NuevaImagen);
                 imwrite(snapshotFilename + "_O.png", bgrMap);
+                imwrite(snapshotFilename + "_C.png", con);
                 imwrite(snapshotFilename + "_HN.png", histogram_N);
                 imwrite(snapshotFilename + "_HO.png", histogram_O);
                 numSnapshot++;
