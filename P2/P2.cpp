@@ -156,7 +156,12 @@ Mat adaptative(Mat src){
    adaptiveThreshold(src, dst,255,CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY_INV,75,10);
    return dst;
 }
-
+/*
+ * Detected type
+ */
+string getType(Moments ms){
+   return "Object";
+}
 /*
  * Main principal
  */
@@ -212,7 +217,6 @@ int main(int argc, char *argv[]) {
 	vector<vector<Point> > contours;
   	vector<Vec4i> hierarchy;
 
-
 	findContours( binary, contours, hierarchy,CV_RETR_LIST, CV_CHAIN_APPROX_TC89_L1, Point(0, 0) );
 	
 	/*
@@ -238,22 +242,23 @@ int main(int argc, char *argv[]) {
 	/*
 	 * Identify objects
 	 */
-	char txt='1'; 
+	string str;
+	char txt='0';
 	for( int i = 0; i < contours.size(); i++ ){
 		//Draw box
 		RotatedRect rect = minAreaRect(contours.at(i));
 		Point2f vertices[4];
 		rect.points(vertices);
-		for (int i = 0; i < 4; i++){
-   		 line(NuevaImagen, vertices[i], vertices[(i+1)%4], color);
+		for (int o = 0; o < 4; o++){
+   		 line(NuevaImagen, vertices[o], vertices[(o+1)%4], color);
 		}
 		//Draw text
 		Point2f point=vertices[0];
 		Mat txtMat=Mat::zeros( binary.size(), CV_8UC3 );
-
-		float ss=scale*rect.size.width;
-		putText(txtMat, &txt, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);
 		txt++;
+		str=txt;//getType(mu[i]);
+		float ss=scale*(rect.size.width/str.size());
+		putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);
 		float angle=abs((int)rect.angle)%180+(((int)rect.angle)-rect.angle);
 		//Rotate text
    		Mat r = getRotationMatrix2D(point, angle, 1.0);
