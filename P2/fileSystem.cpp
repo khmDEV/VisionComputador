@@ -13,16 +13,11 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include <stdio.h>
 #include <fstream>
-
+#include "objectFunctions.h"
+#include "fileSystem.h"
 using namespace cv;
 using namespace std;
 
-struct object{
-	string name;
-	int num;
-	vector<float>mean;
-	vector<float>dsv;
-};
 
 string filename="data.yml";
 string filenameAux="data.yml.bak";
@@ -51,6 +46,7 @@ vector<vector<float> > getMoments(const char* obj){
     return out;
 }
 object getObject(const char* name){
+
 	object obj;
 	obj.name=name;
 	vector<vector<float> > ms=getMoments(name);
@@ -61,15 +57,16 @@ object getObject(const char* name){
     		vector<float> vf=ms.at(i);
 		float f=0,d=0;
     		for (int o = 0; o < vf.size(); o++) {
+			if(n.size()<=o){n.push_back(0);mean.push_back(0);dsv.push_back(0);}
     			mean.at(o)=mean.at(o)+vf.at(o);
-			if(n.size()<o){n.push_back(0);}
 			n.at(o)=n.at(o)+1;
 		}
 		mean.push_back(f);
    	}
-	for (int o = 0; o < mean.size(); o++) {	
+	for (int o = 0; o < n.size(); o++) {	
 		mean.at(o)=mean.at(o)/n.at(o);
 	}
+
 	// Varianza
 	for (int i = 0; i < ms.size(); i++) {
     		vector<float> vf=ms.at(i);
@@ -80,17 +77,21 @@ object getObject(const char* name){
 	for (int o = 0; o < dsv.size(); o++) {	
 		dsv.at(o)=dsv.at(o)/n.at(o);
 	}
+	obj.var=dsv;
+	obj.mean=mean;
+	return obj;
 }
-string getMomentData(Moments m){
+
+string getMomentString(Moments m){
 	std::stringstream d;
-	float m0=m.m00;
-	float m1=m.m20+m.m02;
-	float m2=(m.m20-m.m12)*(m.m20-m.m12)+4*m.m11*m.m11;
-	float m3=(m.m30-3*m.m12)*(m.m30-3*m.m12)+
-			(3*m.m21-m.m03)*(3*m.m21-m.m03);
-	float m4=(m.m30-m.m12)*(m.m30-m.m12)+
-			(m.m21+m.m03)*(m.m21+m.m03);
-	d<<m0<<","<<m1<<","<<m2<<","<<m3<<","<<m4<<";";
+	vector<float> ms=getMomentData(m);
+	for(int i=0;i<ms.size();i++){
+		if(i==ms.size()-1){
+			d<<ms.at(i)<<",";
+		}else{
+			d<<ms.at(i)<<";";
+		}
+	}
 	return d.str();
 }
 bool addMoment(const char* obj,Moments m){
@@ -104,22 +105,22 @@ bool addMoment(const char* obj,Moments m){
    	stringstream ss(strInput);
 	getline(ss,name, ';');
 	if(name==obj){
-		ss<<strInput<<getMomentData(m);
+		ss<<strInput<<getMomentString(m);
 		write=true;
 	}
 	outf<<ss.str()<<"\n";
     }
     if(!write)
     {
-    	outf<<obj<<";"<<getMomentData(m)<<"\n";
+    	outf<<obj<<";"<<getMomentString(m)<<"\n";
     }	
     inf.close();
     outf.close();
     remove(filename.c_str());
     rename(filenameAux.c_str(),filename.c_str());
 }
-vector<char*> getObjetsTypes(){
-    vector<char*> objs;
+vector<string> getObjetsTypes(){
+    vector<string> objs;
     ifstream inf (filename.c_str());
     while (inf)
     {
@@ -127,17 +128,17 @@ vector<char*> getObjetsTypes(){
         inf >> strInput;
    	stringstream ss(strInput);
 	getline(ss,name, ';');
-	char *c;
-	strcpy(c, name.c_str());
-	objs.push_back(c);
+	objs.push_back(name);
     }
+    inf.close();
     return objs;
 }
 vector<object> getObjets(){
 	vector<object> objs;
-	vector<char*> str=getObjetsTypes();
+	vector<string> str=getObjetsTypes();
+
 	for (int i = 0; i < str.size(); i++) {
-		objs.push_back(getObject(str.at(i)));
+		objs.push_back(getObject(str.at(i).c_str()));
 	}
 	return objs;
 }

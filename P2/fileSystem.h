@@ -18,7 +18,11 @@
 using namespace cv;
 using namespace std;
 
-struct object;
+struct object{
+	string name;
+	vector<float>mean;
+	vector<float>var;
+};
 
 bool addMoment(const char*,Moments);
 vector<object> getObjets();
