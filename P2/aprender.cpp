@@ -33,7 +33,6 @@ int main(int argc, char *argv[]) {
  	std::cerr << "Could not open file " << image << std::endl;
         return -1;
     }
-
     /*
      * Get Contors
      */
@@ -45,17 +44,16 @@ int main(int argc, char *argv[]) {
     vector<Moments> mu=calculateMoments(par.first,MINSIZE);
     Moments mS;
     if(mu.size()>1){
-
-	Mat mat=detectObject(bgrMap,par.first);
+	Mat mat=detectObject(bgrMap,par.first,MINSIZE);
         namedWindow("Objetos",  WINDOW_KEEPRATIO);
 	imshow("Objetos", mat);
+	waitKey(20);//Soluciona problema por el cual no se mostraba la imagen
         int i;
 	do{
 		cout << "Select the object:"<<endl;
 		cin >> i;
-	}while(i<0||i>mu.size());
+	}while(i<0||i>=mu.size());
         mS=mu.at(i);
-	return i;
     }else if(mu.size()<1){
     	cerr << "Error: Object not found with minimum size: " << MINSIZE << endl;
 	return -1;

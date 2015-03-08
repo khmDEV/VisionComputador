@@ -113,7 +113,7 @@ vector<Moments> calculateMoments(vector<vector<Point> > contours,int MINSIZE=0){
 
     for( int i = 0; i < contours.size(); i++ ){ 
 	Moments m=moments( contours[i], false );
-	if(MINSIZE<m.m00){	
+	if(MINSIZE<=m.m00){	
 		mu.push_back(m); 
 	}
     }
@@ -123,33 +123,36 @@ vector<Moments> calculateMoments(vector<vector<Point> > contours,int MINSIZE=0){
 /*
  * Detect objects 
  */
-Mat detectObject(Mat NuevaImagen,vector<vector<Point> > contours){
+Mat detectObject(Mat NuevaImagen,vector<vector<Point> > contours,int MINSIZE=1000){
 	Mat out=NuevaImagen.clone();
 	Size fontSize=getTextSize("1", font, 1, thicknessFont, 0);
         float scale=1.0/fontSize.width,MinSize=0.5;
 	string str;
 	char txt='0';
+	vector<Moments> moms=calculateMoments(contours);
 	for( int i = 0; i < contours.size(); i++ ){
-		//Draw box
-		RotatedRect rect = minAreaRect(contours.at(i));
-		Point2f vertices[4];
-		rect.points(vertices);
-		for (int o = 0; o < 4; o++){
-   		 line(out, vertices[o], vertices[(o+1)%4], color);
+		if(moms.at(i).m00>=MINSIZE){
+			//Draw box
+			RotatedRect rect = minAreaRect(contours.at(i));
+			Point2f vertices[4];
+			rect.points(vertices);
+			for (int o = 0; o < 4; o++){
+	   		 line(out, vertices[o], vertices[(o+1)%4], color);
+			}
+			//Draw text
+			Point2f point=vertices[0];
+			Mat txtMat=Mat::zeros( out.size(), CV_8UC3 );
+			str=txt;//getType(mu[i]);
+			float ss=scale*(rect.size.width/str.size());
+			putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);
+			float angle=abs((int)rect.angle)%180+(((int)rect.angle)-rect.angle);
+			//Rotate text
+	   		Mat r = getRotationMatrix2D(point, angle, 1.0);
+	    		cv::warpAffine(txtMat, txtMat, r, txtMat.size());
+			//NuevaImagen=NuevaImagen+txtMat;
+			txtMat.copyTo(out, txtMat);
+			txt++;
 		}
-		//Draw text
-		Point2f point=vertices[0];
-		Mat txtMat=Mat::zeros( out.size(), CV_8UC3 );
-		txt++;
-		str=txt;//getType(mu[i]);
-		float ss=scale*(rect.size.width/str.size());
-		putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);
-		float angle=abs((int)rect.angle)%180+(((int)rect.angle)-rect.angle);
-		//Rotate text
-   		Mat r = getRotationMatrix2D(point, angle, 1.0);
-    		cv::warpAffine(txtMat, txtMat, r, txtMat.size());
-		//NuevaImagen=NuevaImagen+txtMat;
-		txtMat.copyTo(out, txtMat);
 	}
 	return out;
 }
@@ -192,32 +195,35 @@ string identifyObjectName(Moments m,vector<object> objs){
 	}
 	return name;
 }
-Mat identifyObject(Mat NuevaImagen,vector<vector<Point> > contours,vector<object> objs){
+Mat identifyObject(Mat NuevaImagen,vector<vector<Point> > contours,vector<object> objs,int MINSIZE=1000){
 	Mat out=NuevaImagen.clone();
 	Size fontSize=getTextSize("1", font, 1, thicknessFont, 0);
         float scale=1.0/fontSize.width,MinSize=0.5;
 	string str;
 	vector<Moments> moms=calculateMoments(contours);
 	for( int i = 0; i < contours.size(); i++ ){
-		//Draw box
-		RotatedRect rect = minAreaRect(contours.at(i));
-		Point2f vertices[4];
-		rect.points(vertices);
-		for (int o = 0; o < 4; o++){
-   		 line(out, vertices[o], vertices[(o+1)%4], color);
+		if(moms.at(i).m00>=MINSIZE){
+			//Draw box
+			RotatedRect rect = minAreaRect(contours.at(i));		
+			Point2f vertices[4];		
+			rect.points(vertices);		
+			for (int o = 0; o < 4; o++){
+   				line(out, vertices[o], vertices[(o+1)%4], color);		
+			}
+			//Draw text
+			Point2f point=vertices[0];		
+			Mat txtMat=Mat::zeros( out.size(), CV_8UC3 );		
+			str=identifyObjectName(moms.at(i),objs);//getType(mu[i]);
+			float ss=scale*(rect.size.width/str.size());		
+			putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);		
+			float angle=abs((int)rect.angle)%180+(((int)rect.angle)-rect.angle);		
+			//Rotate text
+   			Mat r = getRotationMatrix2D(point, angle, 1.0);		
+   	 		cv::warpAffine(txtMat, txtMat, r, txtMat.size());
+			//NuevaImagen=NuevaImagen+txtMat;
+			txtMat.copyTo(out, txtMat);
+			cout<<"end"<<endl;
 		}
-		//Draw text
-		Point2f point=vertices[0];
-		Mat txtMat=Mat::zeros( out.size(), CV_8UC3 );
-		str=identifyObjectName(moms.at(i),objs);//getType(mu[i]);
-		float ss=scale*(rect.size.width/str.size());
-		putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);
-		float angle=abs((int)rect.angle)%180+(((int)rect.angle)-rect.angle);
-		//Rotate text
-   		Mat r = getRotationMatrix2D(point, angle, 1.0);
-    		cv::warpAffine(txtMat, txtMat, r, txtMat.size());
-		//NuevaImagen=NuevaImagen+txtMat;
-		txtMat.copyTo(out, txtMat);
 	}
 	return out;
 }

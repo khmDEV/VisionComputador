@@ -26,8 +26,8 @@ Mat removeNoise(Mat src);
 pair<vector<vector<Point> >,vector<Vec4i> > getContours(Mat m);
 Mat drawContors(Mat src,vector<vector<Point> > contours,vector<Vec4i> hierarchy);
 vector<Moments> calculateMoments(vector<vector<Point> >,int MINSIZE=0);
-Mat detectObject(Mat NuevaImagen,vector<vector<Point> >);
+Mat detectObject(Mat NuevaImagen,vector<vector<Point> >,int MINSIZE=1000);
 vector<float> getMomentData(Moments);
-Mat identifyObject(Mat NuevaImagen,vector<vector<Point> >,vector<object>);
+Mat identifyObject(Mat NuevaImagen,vector<vector<Point> >,vector<object>,int MINSIZE=1000);
 
 #endif
