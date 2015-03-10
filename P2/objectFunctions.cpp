@@ -10,6 +10,7 @@
 #include "opencv2/imgproc/imgproc_c.h"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <stdio.h>
+#include <math.h>
 #include "fileSystem.h"
 using namespace cv;
 using namespace std;
@@ -144,7 +145,7 @@ Mat detectObject(Mat NuevaImagen,vector<vector<Point> > contours,int MINSIZE=100
 			Mat txtMat=Mat::zeros( out.size(), CV_8UC3 );
 			str=txt;//getType(mu[i]);
 			float ss=scale*(rect.size.width/str.size());
-			putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);
+			putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont);
 			float angle=abs((int)rect.angle)%180+(((int)rect.angle)-rect.angle);
 			//Rotate text
 	   		Mat r = getRotationMatrix2D(point, angle, 1.0);
@@ -161,20 +162,8 @@ Mat detectObject(Mat NuevaImagen,vector<vector<Point> > contours,int MINSIZE=100
  * Calculate invariable moments
  */
 vector<float> getMomentData(Moments m){
-	std::stringstream d;
 	vector<float> out;
-	float m0=m.m00;
-	float m1=m.m20+m.m02;
-	float m2=(m.m20-m.m12)*(m.m20-m.m12)+4*m.m11*m.m11;
-	float m3=(m.m30-3*m.m12)*(m.m30-3*m.m12)+
-			(3*m.m21-m.m03)*(3*m.m21-m.m03);
-	float m4=(m.m30-m.m12)*(m.m30-m.m12)+
-			(m.m21+m.m03)*(m.m21+m.m03);
-	out.push_back(m0);
-	out.push_back(m1);
-	out.push_back(m2);
-	out.push_back(m3);
-	out.push_back(m4);
+        HuMoments(&m, out);
 	return out;
 }
 
@@ -184,14 +173,10 @@ vector<float> getMomentData(Moments m){
 string identifyObjectName(Moments m,vector<object> objs){
 	vector<float> mi=getMomentData(m);
 	string name="Unknow";
+        float algo;
 	for(int i=0;i<objs.size();i++){
-		vector<float> mean=objs.at(i).mean;
-		vector<float> var=objs.at(i).var;
-		int s=min(mean.size(),var.size());
-		float f=0;
-		for(int o=0;o<s;o++){
-			f+=((mi.at(o)-mean.at(o))*(mi.at(o)-mean.at(o)))/var.at(o);
-		}
+		algo= mahalanobis(objs.at(i),mi);
+                cout <<  algo << objs.at(i).name << endl;
 	}
 	return name;
 }
@@ -215,7 +200,7 @@ Mat identifyObject(Mat NuevaImagen,vector<vector<Point> > contours,vector<object
 			Mat txtMat=Mat::zeros( out.size(), CV_8UC3 );		
 			str=identifyObjectName(moms.at(i),objs);//getType(mu[i]);
 			float ss=scale*(rect.size.width/str.size());		
-			putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);		
+			putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont);		
 			float angle=abs((int)rect.angle)%180+(((int)rect.angle)-rect.angle);		
 			//Rotate text
    			Mat r = getRotationMatrix2D(point, angle, 1.0);		
@@ -225,6 +210,15 @@ Mat identifyObject(Mat NuevaImagen,vector<vector<Point> > contours,vector<object
 			cout<<"end"<<endl;
 		}
 	}
-	return out;
+	return out;       
+}
+
+float mahalanobis(object obt, vector<float> aln ){
+    float aux = 0;
+    for (int i=0;i<5;i++){
+     aux= aux + pow((obt.mean.at(i)-aln.at(i))/(obt.var.at(i)),2);
+    }
+    return sqrt(aux);
+
 }
 

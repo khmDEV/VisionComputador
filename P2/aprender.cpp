@@ -17,6 +17,7 @@ using namespace cv;
 using namespace std;
 
 
+
 /*
  * Main principal
  */
@@ -45,7 +46,7 @@ int main(int argc, char *argv[]) {
     Moments mS;
     if(mu.size()>1){
 	Mat mat=detectObject(bgrMap,par.first,MINSIZE);
-        namedWindow("Objetos",  WINDOW_KEEPRATIO);
+    //namedWindow("Objetos",  WINDOW_KEEPRATIO);
 	imshow("Objetos", mat);
 	waitKey(20);//Soluciona problema por el cual no se mostraba la imagen
         int i;
