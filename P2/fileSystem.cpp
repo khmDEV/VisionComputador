@@ -29,7 +29,7 @@ vector<vector<float> > getMoments(const char* obj){
         string strInput,name;
         inf >> strInput;
    	stringstream ss(strInput);
-	getline(ss,name, ';');
+	getline(ss,name, ':');
 	if(name==obj){
 		while(getline(ss,name, ';')){
 			vector<float> v;
@@ -87,9 +87,9 @@ string getMomentString(Moments m){
 	vector<float> ms=getMomentData(m);
 	for(int i=0;i<ms.size();i++){
 		if(i==ms.size()-1){
-			d<<ms.at(i)<<",";
-		}else{
 			d<<ms.at(i)<<";";
+		}else{
+			d<<ms.at(i)<<",";
 		}
 	}
 	return d.str();
@@ -103,7 +103,7 @@ bool addMoment(const char* obj,Moments m){
         string strInput,name;
         inf >> strInput;
    	stringstream ss(strInput);
-	getline(ss,name, ';');
+	getline(ss,name, ':');
 	if(name==obj){
 		ss<<strInput<<getMomentString(m);
 		write=true;
@@ -112,7 +112,7 @@ bool addMoment(const char* obj,Moments m){
     }
     if(!write)
     {
-    	outf<<obj<<";"<<getMomentString(m)<<"\n";
+    	outf<<obj<<":"<<getMomentString(m)<<"\n";
     }	
     inf.close();
     outf.close();
@@ -127,7 +127,7 @@ vector<string> getObjetsTypes(){
         string strInput,name;
         inf >> strInput;
    	stringstream ss(strInput);
-	getline(ss,name, ';');
+	getline(ss,name, ':');
 	objs.push_back(name);
     }
     inf.close();
@@ -138,7 +138,9 @@ vector<object> getObjets(){
 	vector<string> str=getObjetsTypes();
 
 	for (int i = 0; i < str.size(); i++) {
-		objs.push_back(getObject(str.at(i).c_str()));
+		if(str.at(i)!=""){
+			objs.push_back(getObject(str.at(i).c_str()));
+		}
 	}
 	return objs;
 }

@@ -163,13 +163,26 @@ Mat detectObject(Mat NuevaImagen,vector<vector<Point> > contours,int MINSIZE=100
  */
 vector<float> getMomentData(Moments m){
 	vector<float> out;
-        HuMoments(&m, out);
+	double arr[7];
+        HuMoments(m, arr);
+	for(int i=0;i<7;i++){
+		out.push_back((float)arr[i]);
+	}
 	return out;
 }
 
 /*
  * Identify objects 
  */
+float mahalanobis(object obt, vector<float> aln ){
+    float aux = 0;
+    for (int i=0;i<5;i++){
+     aux= aux + pow((obt.mean.at(i)-aln.at(i)),2)/(obt.var.at(i));
+    }
+    return sqrt(aux);
+
+}
+
 string identifyObjectName(Moments m,vector<object> objs){
 	vector<float> mi=getMomentData(m);
 	string name="Unknow";
@@ -213,12 +226,5 @@ Mat identifyObject(Mat NuevaImagen,vector<vector<Point> > contours,vector<object
 	return out;       
 }
 
-float mahalanobis(object obt, vector<float> aln ){
-    float aux = 0;
-    for (int i=0;i<5;i++){
-     aux= aux + pow((obt.mean.at(i)-aln.at(i))/(obt.var.at(i)),2);
-    }
-    return sqrt(aux);
 
-}
 
