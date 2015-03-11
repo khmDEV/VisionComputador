@@ -15,9 +15,9 @@
 using namespace cv;
 using namespace std;
 
-Scalar color=Scalar( 0, 255, 0);
-int font=FONT_HERSHEY_SIMPLEX;
-float thicknessFont=1;
+const Scalar color=Scalar( 0, 255, 0);
+const int font=FONT_HERSHEY_SIMPLEX;
+const float thicknessFont=1,MARGEN=3.84;
 
 /*
  * Grises
@@ -176,7 +176,7 @@ vector<float> getMomentData(Moments m){
  */
 float mahalanobis(object obt, vector<float> aln ){
     float aux = 0;
-    for (int i=0;i<5;i++){
+    for (int i=0;i<3;i++){
      aux= aux + pow((obt.mean.at(i)-aln.at(i)),2)/(obt.var.at(i));
     }
     return sqrt(aux);
@@ -186,10 +186,19 @@ float mahalanobis(object obt, vector<float> aln ){
 string identifyObjectName(Moments m,vector<object> objs){
 	vector<float> mi=getMomentData(m);
 	string name="Unknow";
-        float algo;
+        float algo,n=0;//,f;
 	for(int i=0;i<objs.size();i++){
 		algo= mahalanobis(objs.at(i),mi);
                 cout <<  algo << objs.at(i).name << endl;
+		if(MARGEN>algo){
+			n++;
+			if(n<2){//||f>algo){
+				//f=algo;
+				name=objs.at(i).name;
+			}else if(n>1){
+				return "Doubfull";
+			}
+		}
 	}
 	return name;
 }
