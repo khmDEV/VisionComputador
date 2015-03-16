@@ -2,11 +2,8 @@
  * Autores: Aron Collados (626558)
  *          Cristian Roman (646564)
  */
-#include <iostream>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <string>
-#include <sstream>
 #include "opencv2/imgproc/imgproc_c.h"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <stdio.h>
@@ -20,7 +17,7 @@ using namespace std;
  * Main principal
  */
 int main(int argc, char *argv[]) {
-    std::string image;
+    char* image;
     if (argc == 1) {
         cout << "Introduza la ruta de la imagen;" << endl; //img/circulo2.pgm
         cin>> image;
@@ -33,7 +30,7 @@ int main(int argc, char *argv[]) {
 
     Mat bgrMap = imread(image, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
     if (bgrMap.empty()) {
-        std::cerr << "Could not open file " << image << std::endl;
+        cerr << "Could not open file " << image << endl;
         return -1;
     }
     vector<object>objs = getObjets();

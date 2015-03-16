@@ -5,8 +5,6 @@
 #include <iostream>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <string>
-#include <sstream>
 #include "opencv2/imgproc/imgproc_c.h"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <stdio.h>
@@ -21,26 +19,26 @@ using namespace std;
  */
 int main(int argc, char *argv[]) {
     int MINSIZE;
-    std::string image, obj, size;
+    string obj;
+    char * image;
     if (argc == 1) {
-        size = "1000";
-         cout << "Introduza la ruta de la imagen;" << endl; //img/circulo2.pgm
+        cout << "Introduza la ruta de la imagen;" << endl; //img/circulo2.pgm
         cin>> image;
         cout << "Introduza el tipo de objeto" << endl;
         cin>> obj;
-
-        MINSIZE = atoi(size.c_str());
+        MINSIZE = 1000;
+    } else if (argc == 4) {
+        MINSIZE = atoi(argv[4]);
     } else if (argc < 3) {
-        cerr << " Error: nomfich nomobj [MINSIZE]" << endl; //MINSIZE??
+        cerr << " Error: nomfich nomobj [MINSIZE]" << endl;
         return -1;
     } else {
-        size = "1000";
-        MINSIZE = atoi(size.c_str());
+        MINSIZE = 1000;
     }
 
     Mat bgrMap = imread(image, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
     if (bgrMap.empty()) {
-        std::cerr << "Could not open file " << image << std::endl;
+        cerr << "Could not open file " << image << endl;
         return -1;
     }
     /*
@@ -55,7 +53,6 @@ int main(int argc, char *argv[]) {
     Moments mS;
     if (mu.size() > 1) {
         Mat mat = detectObject(bgrMap, par, MINSIZE);
-        //namedWindow("Objetos",  WINDOW_KEEPRATIO);
         imshow("Objetos", mat);
         waitKey(20); //Soluciona problema por el cual no se mostraba la imagen
         int i;
