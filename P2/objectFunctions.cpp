@@ -45,64 +45,27 @@ Mat adaptative(Mat src){
    adaptiveThreshold(src, dst,255,CV_ADAPTIVE_THRESH_MEAN_C, CV_THRESH_BINARY_INV,75,10);
    return dst;
 }
-/*
- * Filtro de ruido
- */
-Mat removeNoise(Mat src) {
-    Mat dst = src.clone();
-    int v[3][3] = {{1, 2, 1},{2, 4, 2},{1, 2, 1} };
-    //int v[5][5]={{1,4,6,4,1},{4,16,24,16,4},{6,24,36,24,6},{4,16,24,16,4},{1,4,6,4,1}};
-    int m = 0;
-    size_t r = sizeof (*v) / sizeof (*v[0]), c = r;
-    for (int i = 0; i < r; i++) {
-        for (int j = 0; j < c; j++) {
-            m += v[i][j];
-        }
-    }
 
-    int cr = r / 2, cc = c / 2;
-
-    for (int i = cr; i < src.rows - cr; i++) {
-        for (int j = cc; j < src.cols - cc; j++) {
-            int tr = 0, tg = 0, tb = 0;
-            for (int a = 0; a < r; a++) {
-                for (int b = 0; b < c; b++) {
-                    int coe = v[a][b];
-                    tr += src.at<Vec3b>(i + a - cr, j + b - cc)[0] * coe;
-                    tg += src.at<Vec3b>(i + a - cr, j + b - cc)[1] * coe;
-                    tb += src.at<Vec3b>(i + a - cr, j + b - cc)[2] * coe;
-                }
-            }
-            dst.at<Vec3b>(i, j)[0] = tr / m;
-            dst.at<Vec3b>(i, j)[1] = tg / m;
-            dst.at<Vec3b>(i, j)[2] = tb / m;
-        }
-    }
-    return dst;
-}
 /*
  * Get contours
  */
-pair<vector<vector<Point> >,vector<Vec4i> > getContours(Mat m){
+vector<vector<Point> > getContours(Mat m){
    Mat binary=(Otsu(Grises(m)));
    vector<vector<Point> > contours;
    vector<Vec4i> hierarchy;
    findContours( binary, contours, hierarchy,CV_RETR_LIST, CV_CHAIN_APPROX_TC89_L1, Point(0, 0) );
-   pair<vector<vector<Point> >,vector<Vec4i> > p;
-   p.first=contours;
-   p.second=hierarchy;
-   return p;
+   return contours;
 }
 /*
  * Draw contours 
  */
-Mat drawContors(Mat src,vector<vector<Point> > contours,vector<Vec4i> hierarchy) {
+Mat drawContors(Mat src,vector<vector<Point> > contours) {
    	RNG rng(12345);//rand()*1000);//
   	Mat con = Mat::zeros( src.size(), CV_8UC3 );
    	for( int i = 0; i< contours.size(); i++ )
     	 {
 		Scalar color = Scalar( rng.uniform(0, 255), rng.uniform(0,255), rng.uniform(0,255) );
-    		drawContours( con, contours, i, color, 2, 8, hierarchy, 0, Point() );
+    		drawContours( con, contours, i, color, 2, 8);
     	}
 	return con;
 }
@@ -192,12 +155,12 @@ string identifyObjectName(Moments m,vector<object> objs){
                 cout <<  algo << objs.at(i).name << endl;
 		if(MARGEN>algo){
 			n++;
-			if(n<2){//||f>algo){
+			//if(n<2){//||f>algo){
 				//f=algo;
 				name=objs.at(i).name;
-			}else if(n>1){
-				return "Doubfull";
-			}
+			//}else if(n>1){    
+			//	return "Doubfull";
+			//}
 		}
 	}
 	return name;

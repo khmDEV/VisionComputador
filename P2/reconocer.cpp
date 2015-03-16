@@ -16,28 +16,33 @@
 using namespace cv;
 using namespace std;
 
-
 /*
  * Main principal
  */
 int main(int argc, char *argv[]) {
-    if(argc<2){
-    	cerr << argv[0] << " nomfich" << endl;
+    std::string image;
+    if (argc == 1) {
+        cout << "Introduza la ruta de la imagen;" << endl; //img/circulo2.pgm
+        cin>> image;
+    } else if (argc < 2) {
+        cerr << argv[0] << " nomfich" << endl;
         return -1;
+    } else {
+        image = argv[1];
     }
-    std::string image = argv[1];
 
     Mat bgrMap = imread(image, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
     if (bgrMap.empty()) {
- 	std::cerr << "Could not open file " << image << std::endl;
+        std::cerr << "Could not open file " << image << std::endl;
         return -1;
     }
-   vector<object>objs= getObjets();
-   pair<vector<vector<Point> >,vector<Vec4i> > par= getContours(bgrMap);
-   Mat m=identifyObject(bgrMap,par.first,objs);
-   cout << "Pulsa 'escape' para salir" << endl;
-   namedWindow("Objetos", WINDOW_KEEPRATIO);
-   imshow( "Objetos", m );
-   char key='0';
-   while (key != 27){ key = waitKey(20);}
+    vector<object>objs = getObjets();
+    vector<vector<Point> > par = getContours(bgrMap);
+    Mat m = identifyObject(bgrMap, par, objs);
+    cout << "Pulsa 'escape' para salir" << endl;
+    imshow("Objetos", m);
+    char key = '0';
+    while (key != 27) {
+        key = waitKey(20);
+    }
 }

@@ -181,11 +181,6 @@ int main(int argc, char *argv[]) {
     float scale=1.0/fontSize.width,MinSize=0.5;
     cout << fontSize.width << " - " << scale << endl;
     //Inicializa las ventanas
-    namedWindow("BGR image",  WINDOW_KEEPRATIO);
-    namedWindow("Imagen detencion",  WINDOW_KEEPRATIO);   
-    namedWindow("Contorno",  WINDOW_KEEPRATIO);
-    namedWindow("Histograma original", WINDOW_KEEPRATIO);
-    namedWindow("Histograma destino", WINDOW_KEEPRATIO);
     Effect binaryEffect=*Otsu,change=*adaptative;
 
     std::string arg = argc>1?argv[1]:"0";   
@@ -258,7 +253,6 @@ int main(int argc, char *argv[]) {
 		txt++;
 		str=txt;//getType(mu[i]);
 		float ss=scale*(rect.size.width/str.size());
-		putText(txtMat, str, point, font, ss<MinSize?MinSize:ss,color, thicknessFont, LINE_AA);
 		float angle=abs((int)rect.angle)%180+(((int)rect.angle)-rect.angle);
 		//Rotate text
    		Mat r = getRotationMatrix2D(point, angle, 1.0);
