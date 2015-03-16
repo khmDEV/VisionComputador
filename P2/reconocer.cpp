@@ -12,12 +12,14 @@
 
 using namespace cv;
 using namespace std;
+extern int alfa;
 
 /*
  * Main principal
  */
 int main(int argc, char *argv[]) {
     char* image;
+    alfa = 1;
     if (argc == 1) {
         cout << "Introduza la ruta de la imagen;" << endl; //img/circulo2.pgm
         cin>> image;
@@ -40,6 +42,15 @@ int main(int argc, char *argv[]) {
     imshow("Objetos", m);
     char key = '0';
     while (key != 27) {
+        m = identifyObject(bgrMap, par, objs);
+        imshow("Objetos", m);
+
+        if (key == 45) {//-
+            alfa = alfa - 1;
+        }
+        if (key == 43) { //+
+            alfa == alfa + 1;
+        }
         key = waitKey(20);
     }
 }

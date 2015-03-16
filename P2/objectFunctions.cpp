@@ -111,7 +111,7 @@ Mat detectObject(Mat NuevaImagen, vector<vector<Point> > contours, int MINSIZE =
             float angle = abs((int) rect.angle) % 180 + (((int) rect.angle) - rect.angle);
             //Rotate text
             Mat r = getRotationMatrix2D(point, angle, 1.0);
-            cv::warpAffine(txtMat, txtMat, r, txtMat.size());
+            warpAffine(txtMat, txtMat, r, txtMat.size());
             //NuevaImagen=NuevaImagen+txtMat;
             txtMat.copyTo(out, txtMat);
             txt++;
@@ -188,7 +188,7 @@ Mat identifyObject(Mat NuevaImagen, vector<vector<Point> > contours, vector<obje
             float angle = abs((int) rect.angle) % 180 + (((int) rect.angle) - rect.angle);
             //Rotate text
             Mat r = getRotationMatrix2D(point, angle, 1.0);
-            cv::warpAffine(txtMat, txtMat, r, txtMat.size());
+            warpAffine(txtMat, txtMat, r, txtMat.size());
             //NuevaImagen=NuevaImagen+txtMat;
             txtMat.copyTo(out, txtMat);
             cout << "end" << endl;
