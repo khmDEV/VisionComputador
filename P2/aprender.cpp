@@ -19,8 +19,7 @@ using namespace std;
  */
 int main(int argc, char *argv[]) {
     int MINSIZE;
-    string obj;
-    char * image;
+    string obj,image;
     if (argc == 1) {
         cout << "Introduza la ruta de la imagen;" << endl; //img/circulo2.pgm
         cin>> image;

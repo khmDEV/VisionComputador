@@ -12,13 +12,13 @@
 
 using namespace cv;
 using namespace std;
-extern int alfa;
+int alfa;
 
 /*
  * Main principal
  */
 int main(int argc, char *argv[]) {
-    char* image;
+    string image;
     alfa = 1;
     if (argc == 1) {
         cout << "Introduza la ruta de la imagen;" << endl; //img/circulo2.pgm
@@ -29,7 +29,6 @@ int main(int argc, char *argv[]) {
     } else {
         image = argv[1];
     }
-
     Mat bgrMap = imread(image, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
     if (bgrMap.empty()) {
         cerr << "Could not open file " << image << endl;
@@ -46,10 +45,10 @@ int main(int argc, char *argv[]) {
         imshow("Objetos", m);
 
         if (key == 45) {//-
-            alfa = alfa - 1;
+            alfa=alfa-1;
         }
         if (key == 43) { //+
-            alfa == alfa + 1;
+            alfa=alfa+1;
         }
         key = waitKey(20);
     }
