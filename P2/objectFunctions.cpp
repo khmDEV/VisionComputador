@@ -15,7 +15,7 @@ using namespace std;
 
 const Scalar color = Scalar(0, 255, 0);
 const int font = FONT_HERSHEY_SIMPLEX;
-const float thicknessFont = 1, MARGEN = 3.84;
+const float thicknessFont = 1, MARGEN = 7.8147;
 
 /*
  * Grises
@@ -157,7 +157,7 @@ string identifyObjectName(Moments m, vector<object> objs, double alfa) {
             if (n < 2) {
                 name = objs.at(i).name;
             } else if (n > 1) {
-                name = "Doubfull";
+                return "Doubfull";
             }
         }
     }
@@ -182,7 +182,10 @@ Mat identifyObject(Mat NuevaImagen, vector<vector<Point> > contours, vector<obje
             //Draw text
             Point2f point = vertices[0];
             Mat txtMat = Mat::zeros(out.size(), CV_8UC3);
-            str = identifyObjectName(moms.at(i), objs, alfa); //getType(mu[i]);
+            str = identifyObjectName(moms.at(i), objs, 1); //getType(mu[i]);
+	    if(str=="Doubfull"){
+	    	  str = identifyObjectName(moms.at(i), objs, alfa); //getType(mu[i]);
+	    }
             float ss = scale * (rect.size.width / str.size());
             putText(txtMat, str, point, font, ss < MinSize ? MinSize : ss, color, thicknessFont);
             float angle = abs((int) rect.angle) % 180 + (((int) rect.angle) - rect.angle);

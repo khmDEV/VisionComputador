@@ -41,7 +41,9 @@ int main(int argc, char *argv[]) {
     char key = 0;
     while (key != 27) {
         imshow("Objetos", m);
-
+	if(key==32){ //space
+                imwrite( "detect.png", m);
+	}
         if (key == 45) {//-
             alfa = alfa - 0.1;
             m = identifyObject(bgrMap, par, objs, alfa);
