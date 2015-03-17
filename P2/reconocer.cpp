@@ -12,14 +12,12 @@
 
 using namespace cv;
 using namespace std;
-int alfa;
 
 /*
  * Main principal
  */
 int main(int argc, char *argv[]) {
     string image;
-    alfa = 1;
     if (argc == 1) {
         cout << "Introduza la ruta de la imagen;" << endl; //img/circulo2.pgm
         cin>> image;
@@ -36,19 +34,23 @@ int main(int argc, char *argv[]) {
     }
     vector<object>objs = getObjets();
     vector<vector<Point> > par = getContours(bgrMap);
-    Mat m = identifyObject(bgrMap, par, objs);
+    double alfa = 1;
+    Mat m = identifyObject(bgrMap, par, objs, alfa);
     cout << "Pulsa 'escape' para salir" << endl;
     imshow("Objetos", m);
-    char key = '0';
+    char key = 0;
     while (key != 27) {
-        m = identifyObject(bgrMap, par, objs);
         imshow("Objetos", m);
 
         if (key == 45) {//-
-            alfa=alfa-1;
+            alfa = alfa - 0.1;
+            m = identifyObject(bgrMap, par, objs, alfa);
+            cout << alfa << endl;
         }
         if (key == 43) { //+
-            alfa=alfa+1;
+            alfa = alfa + 0.1;
+            m = identifyObject(bgrMap, par, objs, alfa);
+            cout << alfa << endl;
         }
         key = waitKey(20);
     }
