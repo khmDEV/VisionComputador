@@ -70,6 +70,7 @@ object getObject(const char* name) {
     }
     for (int o = 0; o < n.size(); o++) {
         mean.at(o) = mean.at(o) / n.at(o);
+        cout << name << o << " mean " << mean.at(o) << endl;
     }
 
     // Varianza
@@ -81,7 +82,7 @@ object getObject(const char* name) {
     }
     for (int o = 0; o < dsv.size(); o++) {
         dsv.at(o) = dsv.at(o) / n.at(o);
-        dsv.at(o) = (pow(dsv.at(o), 2)*0.01 / n.size())+((n.size() - 1 / n.size()) * dsv.at(o));
+        cout << name << o << " var " << dsv.at(o) << endl;
 
     }
     obj.var = dsv;
@@ -89,9 +90,12 @@ object getObject(const char* name) {
     return obj;
 }
 
-string getMomentString(Moments m) {
+string getMomentString(Moments m, double perim) {
     std::stringstream d;
     vector<float> ms = getMomentData(m);
+    d << m.m00 << ",";
+    d << perim << ",";
+
     for (int i = 0; i < ms.size(); i++) {
         if (i == ms.size() - 1) {
             d << ms.at(i) << ";";
@@ -102,7 +106,7 @@ string getMomentString(Moments m) {
     return d.str();
 }
 
-bool addMoment(const char* obj, Moments m) {
+bool addMoment(const char* obj, Moments m, double perim) {
     ofstream outf(filenameAux.c_str());
     ifstream inf(filename.c_str());
     bool write = false;
@@ -112,13 +116,13 @@ bool addMoment(const char* obj, Moments m) {
         stringstream ss(strInput);
         getline(ss, name, ':');
         if (name == obj) {
-            ss << strInput << getMomentString(m);
+            ss << strInput << getMomentString(m, perim);
             write = true;
         }
         outf << ss.str() << "\n";
     }
     if (!write) {
-        outf << obj << ":" << getMomentString(m) << "\n";
+        outf << obj << ":" << getMomentString(m, perim) << "\n";
     }
     inf.close();
     outf.close();

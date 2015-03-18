@@ -24,7 +24,7 @@ struct object{
 	vector<float>var;
 };
 
-bool addMoment(const char*,Moments);
+bool addMoment(const char*,Moments,double perim);
 vector<object> getObjets();
 
 #endif

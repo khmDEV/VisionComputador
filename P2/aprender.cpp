@@ -43,13 +43,14 @@ int main(int argc, char *argv[]) {
     /*
      * Get Contors
      */
-    vector<vector<Point> > par = getContours(bgrMap);
+    vector<vector<Point> > par = getContours(bgrMap, MINSIZE);
 
     /*
      * Calculate Moments
      */
     vector<Moments> mu = calculateMoments(par, MINSIZE);
     Moments mS;
+    double perim;
     if (mu.size() > 1) {
         Mat mat = detectObject(bgrMap, par, MINSIZE);
         imshow("Objetos", mat);
@@ -60,15 +61,20 @@ int main(int argc, char *argv[]) {
             cin >> i;
         } while (i < 0 || i >= mu.size());
         mS = mu.at(i);
+        perim=arcLength(par.at(i),true);
     } else if (mu.size() < 1) {
         cerr << "Error: Object not found with minimum size: " << MINSIZE << endl;
         return -1;
     } else {
         mS = mu.at(0);
+        perim=arcLength(par.at(0),true);
+        
+        cout << perim << endl;
+        cout << mu.at(0).m00 << endl;
     }
     /*
      * Learn
      */
-    addMoment(obj.c_str(), mS);
+    addMoment(obj.c_str(), mS,perim);
     cout << "Aprendido!" << endl;
 }

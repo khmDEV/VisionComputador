@@ -34,23 +34,23 @@ int main(int argc, char *argv[]) {
     }
     vector<object>objs = getObjets();
     vector<vector<Point> > par = getContours(bgrMap);
-    double alfa = 1;
+    double alfa = 0;
     Mat m = identifyObject(bgrMap, par, objs, alfa);
     cout << "Pulsa 'escape' para salir" << endl;
     imshow("Objetos", m);
     char key = 0;
     while (key != 27) {
         imshow("Objetos", m);
-	if(key==32){ //space
-                imwrite( "detect.png", m);
-	}
-        if (key == 45) {//-
-            alfa = alfa - 0.1;
+        if (key == 32) { //space
+            imwrite("detect.png", m);
+        }
+        if (key == 101) {//-
+            alfa = alfa == 0.01 ? 0 : alfa - 0.01;
             m = identifyObject(bgrMap, par, objs, alfa);
             cout << alfa << endl;
         }
-        if (key == 43) { //+
-            alfa = alfa + 0.1;
+        if (key == 99) { //+
+            alfa = alfa == -0.01 ? 0 : alfa + 0.01;
             m = identifyObject(bgrMap, par, objs, alfa);
             cout << alfa << endl;
         }

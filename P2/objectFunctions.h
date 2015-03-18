@@ -23,7 +23,7 @@ Mat Grises(Mat bgrMap);
 Mat Otsu(Mat src);
 Mat adaptative(Mat src);
 Mat removeNoise(Mat src);
-vector<vector<Point> > getContours(Mat m);
+vector<vector<Point> > getContours(Mat m,int MINSIZE=1000);
 Mat drawContors(Mat src,vector<vector<Point> > contours);
 vector<Moments> calculateMoments(vector<vector<Point> >,int MINSIZE=0);
 Mat detectObject(Mat NuevaImagen,vector<vector<Point> >,int MINSIZE=1000);

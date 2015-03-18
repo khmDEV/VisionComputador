@@ -15,7 +15,7 @@ using namespace std;
 
 const Scalar color = Scalar(0, 255, 0);
 const int font = FONT_HERSHEY_SIMPLEX;
-const float thicknessFont = 1, MARGEN = 7.8147;
+const float thicknessFont = 1, MARGEN = 11.07;
 
 /*
  * Grises
@@ -47,12 +47,18 @@ Mat adaptative(Mat src) {
 /*
  * Get contours
  */
-vector<vector<Point> > getContours(Mat m) {
+vector<vector<Point> > getContours(Mat m,int MINSIZE=1000) {
     Mat binary = (Otsu(Grises(m)));
-    vector<vector<Point> > contours;
+    vector<vector<Point> > contours,out;
     vector<Vec4i> hierarchy;
-    findContours(binary, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_TC89_L1, Point(0, 0));
-    return contours;
+    findContours(binary, contours, hierarchy, CV_RETR_LIST, CV_CHAIN_APPROX_NONE, Point(0, 0));
+    for(int i=0;i<contours.size();i++){
+        Moments m = moments(contours.at(i), false);
+        if (MINSIZE <= m.m00) {
+            out.push_back(contours.at(i));
+        }
+    }
+    return out;
 }
 
 /*
@@ -93,6 +99,7 @@ Mat detectObject(Mat NuevaImagen, vector<vector<Point> > contours, int MINSIZE =
     string str;
     char txt = '0';
     vector<Moments> moms = calculateMoments(contours);
+  
     for (int i = 0; i < contours.size(); i++) {
         if (moms.at(i).m00 >= MINSIZE) {
             //Draw box
@@ -138,19 +145,36 @@ vector<float> getMomentData(Moments m) {
  */
 float mahalanobis(object obt, vector<float> aln,double alfa) {
     float aux = 0;
-    for (int i = 0; i < 3; i++) {
-        aux = aux + pow(alfa*(obt.mean.at(i) - aln.at(i)), 2) / (obt.var.at(i));
+    int n= 5;
+      float devreg ;
+    for (int i = 0; i < 5; i++) {
+        if(alfa!=0){
+            devreg   = (pow(obt.mean.at(i)*alfa, 2.0) / n)+ ((n - 1 / n) * obt.var.at(i));
+            aux = aux + pow((obt.mean.at(i) - aln.at(i)), 2.0) / (devreg);
+        }else{
+            aux = aux + pow((obt.mean.at(i) - aln.at(i)), 2.0) / (obt.var.at(i));
+        }
     }
     return sqrt(aux);
 
 }
 
-string identifyObjectName(Moments m, vector<object> objs, double alfa) {
+string identifyObjectName(Moments m,int perim, vector<object> objs, double alfa) {
     vector<float> mi = getMomentData(m);
+    
+    vector<float> cmp;
+    cmp.push_back(m.m00);
+    cmp.push_back(perim);
+    for (int i = 0; i < mi.size(); i++) {
+        cmp.push_back(mi.at(i));
+    }
+    for (int i = 0; i < cmp.size(); i++) {
+        cout << "<<<<< "<< cmp.at(i)<<endl;
+    }
     string name = "Unknow";
     float algo, n = 0; //,f;
     for (int i = 0; i < objs.size(); i++) {
-        algo = mahalanobis(objs.at(i), mi,alfa);
+        algo = mahalanobis(objs.at(i), cmp,alfa);
         cout << algo << objs.at(i).name << endl;
         if (MARGEN > algo) {
             n++;
@@ -182,10 +206,11 @@ Mat identifyObject(Mat NuevaImagen, vector<vector<Point> > contours, vector<obje
             //Draw text
             Point2f point = vertices[0];
             Mat txtMat = Mat::zeros(out.size(), CV_8UC3);
-            str = identifyObjectName(moms.at(i), objs, 1); //getType(mu[i]);
-	    if(str=="Doubfull"){
-	    	  str = identifyObjectName(moms.at(i), objs, alfa); //getType(mu[i]);
-	    }
+            double perim=arcLength(contours.at(i),true);
+            str = identifyObjectName(moms.at(i),perim, objs, alfa); //getType(mu[i]);
+           // if(str=="Doubfull"&&alfa!=0){
+              //  str = identifyObjectName(moms.at(i),perim, objs, alfa); //getType(mu[i]);
+            //}
             float ss = scale * (rect.size.width / str.size());
             putText(txtMat, str, point, font, ss < MinSize ? MinSize : ss, color, thicknessFont);
             float angle = abs((int) rect.angle) % 180 + (((int) rect.angle) - rect.angle);
