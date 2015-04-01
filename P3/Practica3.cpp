@@ -17,7 +17,8 @@ using namespace std;
 int scale = 1;
 int delta = 0;
 int ddepth = CV_32F;
-int UMBRAL = 100;
+int UMBRAL = 150;
+float MARGEN=0.2;
 /*
  * Main principal
  */
@@ -111,62 +112,80 @@ int main(int argc, char *argv[]) {
 
 
     //Votacion al punto central///////////////////////
-    Mat center=bgrMap.clone();
-    Mat vote=bgrMap.clone();
-    int values[bgrMap.cols];
-    for(int i=0;i<bgrMap.cols;i++){
-    	values[i]=0;
-    }
+    Mat votos=bgrMap.clone();
+    Mat fuga=bgrMap.clone();
     Vec3b color=Vec3b(255,0,0);
     float angle,xD,yD,xP,yP;
     int mean=round(grey.rows/2); //Horizonte 
-    int direcion=0; 
-    int max=0,maxI=0;
+    int minY=round(mean-(grey.rows/2)*MARGEN);
+    int maxY=round(mean+(grey.rows/2)*MARGEN);
+
+    int values[bgrMap.cols][maxY-minY];  //tabla de votos
     for(int i=0;i<bgrMap.cols;i++){
-    	for(int o=0;o<bgrMap.rows;o++){
+        for(int o=0;o<maxY-minY;o++){
+    		values[i][o]=0;
+	}
+    }
+
+    int direcion=0; 
+    int max=0,maxIX=0,maxIY=0;
+    for(int i=0;i<grad.cols;i++){
+    	for(int o=0;o<grad.rows;o++){
     		xP=i;		 //Posicion inicial en el eje X
 		yP=o;            //Posicion inicial en el eje Y
     		if((int)grad.at<uchar>(yP,xP)>UMBRAL){
     			angle=dir.at<float>(yP,xP);
-			
 			xD=sin(angle);   //Modulo de la direcion en el eje X
 			yD=cos(angle);   //Modulo de la direcion en el eje Y
-			//cout<<i<<","<<o<<":- "<<xD<<" - "<<yD<<endl;
-			//cout<<i<<","<<o<<":- "<<bgrMap.cols<<" - "<<bgrMap.rows<<endl;
-			direcion=(yP<mean&&yD>0)||(yP>mean&&yD<0)?1:-1;   // direcion del vector
-			if(yD<0.99&&yD>0.01){    //Se eliminan las lineas verticales
-				while(round(yP)!=mean   //Se ha alcanzado el horizonte
-					&&(xP>=0&&xP<bgrMap.cols)&&(yP>=0&&yP<bgrMap.rows)){ 
-							//Comprueba que el punto central se encuentra en la imagen
-					center.at<Vec3b>(yP,xP)=color;
-					xP=xP+direcion*xD;
+			if(abs(yD)<0.9&&abs(yD)>0.1){    //Se eliminan las lineas verticales
+				direcion=(yP<minY&&yD>0)||(yP>minY&&yD<0)?1:-1;   // direcion del vector
+				int intX=round(xP);
+				int intY=round(yP);
+				while(intY!=minY
+					&&(intX>=0&&intX<bgrMap.cols)&&(intY>=0&&intY<bgrMap.rows)){
+					votos.at<Vec3b>(yP,xP)=color;
+					xP=xP+direcion*xD;    //avanza
 					yP=yP+direcion*yD;
-    					//cout<<i<<","<<o<<":- "<<xP<<" - "<<yP<<endl;
+					intX=round(xP);
+					intY=round(yP);
 				}
-				if(xP>=0&&xP<bgrMap.cols){
-					int id=round(xP);
-					values[id]=values[id]+1;
-					if(values[id]>max){
-						max=values[id];
-						maxI=id;
+
+				direcion=(yP<maxY&&yD>0)||(yP>maxY&&yD<0)?1:-1;   // direcion del vector
+				while((intX>=0&&intX<bgrMap.cols)&&(intY>=minY&&intY<maxY)){ 
+							//Comprueba que el punto central se encuentra en la imagen
+					int valueY=intY-minY;
+					values[intX][valueY]=values[intX][valueY]+1;  //Vota al pixel
+					if(values[intX][valueY]>max){    //Pixel mas votado?
+						max=values[intX][valueY];
+						maxIX=intX;
+						maxIY=intY;
 					}
-    					vote.at<Vec3b>(yP,xP)[0]=center.at<Vec3b>(xP,yP)[0]+1;
-					vote.at<Vec3b>(yP,xP)[1]=0;
-					vote.at<Vec3b>(yP,xP)[2]=0;
+					votos.at<Vec3b>(yP,xP)=color;
+					xP=xP+direcion*xD;    //avanza
+					yP=yP+direcion*yD;
+					intX=round(xP);
+					intY=round(yP);
 				}
+					
 			}
     		}
 	}
     }
 
+    //Dibuja la cruz
     for(int i=0;i<bgrMap.rows;i++){
-    	vote.at<Vec3b>(i,maxI)[0]=0;
-	vote.at<Vec3b>(i,maxI)[1]=255;
-	vote.at<Vec3b>(i,maxI)[2]=0;	
+    	fuga.at<Vec3b>(i,maxIX)[0]=0;
+	fuga.at<Vec3b>(i,maxIX)[1]=255;
+	fuga.at<Vec3b>(i,maxIX)[2]=0;	
+    }
+    for(int i=0;i<bgrMap.cols;i++){
+    	fuga.at<Vec3b>(maxIY,i)[0]=0;
+	fuga.at<Vec3b>(maxIY,i)[1]=255;
+	fuga.at<Vec3b>(maxIY,i)[2]=0;	
     }
 
-    imshow("Punto central", center);
-    imshow("Punto central max", vote);
+    imshow("Punto central", votos);
+    imshow("Punto central max", fuga);
     //////////////////////////////////////////////////
 
 
