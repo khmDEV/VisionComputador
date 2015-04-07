@@ -17,8 +17,8 @@ using namespace std;
 int scale = 1;
 int delta = 0;
 int ddepth = CV_32F;
-int UMBRAL = 150;
-float MARGEN=0.2;
+int UMBRAL = 100;
+float MARGEN=0.3;
 /*
  * Main principal
  */
@@ -112,12 +112,14 @@ int main(int argc, char *argv[]) {
 
 
     //Votacion al punto central///////////////////////
+
+    /*
     Mat votos=bgrMap.clone();
     Mat fuga=bgrMap.clone();
     Vec3b color=Vec3b(255,0,0);
     float angle,xD,yD,xP,yP;
     int mean=round(grey.rows/2); //Horizonte 
-    int minY=round(mean-(grey.rows/2)*MARGEN);
+    int minY=round(mean-(grey.rows/2)*MARGEN);  //
     int maxY=round(mean+(grey.rows/2)*MARGEN);
 
     int values[bgrMap.cols][maxY-minY];  //tabla de votos
@@ -186,6 +188,90 @@ int main(int argc, char *argv[]) {
 
     imshow("Punto central", votos);
     imshow("Punto central max", fuga);
+
+    */
+
+    /*
+     * Metodo de Hough 
+     */
+    Mat dst;
+    Mat votos=bgrMap.clone();
+    Mat fuga=bgrMap.clone();
+    Vec3b color=Vec3b(255,0,0);
+    float angle,xD,yD,xP,yP;
+    int mean=round(grey.rows/2); //Horizonte 
+    int minY=round(mean-(grey.rows/2)*MARGEN);  //
+    int maxY=round(mean+(grey.rows/2)*MARGEN);
+
+    int values[bgrMap.cols][maxY-minY];  //tabla de votos
+    for(int i=0;i<bgrMap.cols;i++){
+        for(int o=0;o<maxY-minY;o++){
+    		values[i][o]=0;
+	}
+    }
+
+    int direcion=0; 
+    int max=0,maxIX=0,maxIY=0;
+
+    Canny(grey, dst, 50, 200, 3);
+
+    vector<Vec2f> lines;
+    HoughLines(dst, lines, 1, CV_PI/180, UMBRAL, 0, 0 );
+
+     for( size_t i = 0; i < lines.size(); i++ )
+     {
+     	float rho = lines[i][0], theta = lines[i][1];
+
+    	double yD = cos(theta), xD = -sin(theta);
+	if(abs(yD)<0.9&&abs(yD)>0.1){    //Se eliminan las lineas verticales
+		Point pt1, pt2;
+    		double xP = yD*rho, yP = -xD*rho;
+ 	   	pt1.x = cvRound(xP + 1000*(xD));
+	    	pt1.y = cvRound(yP + 1000*(yD));
+	     	pt2.x = cvRound(xP - 1000*(xD));
+     		pt2.y = cvRound(yP - 1000*(yD));
+     		line( votos, pt1, pt2, color, 1, CV_AA);
+
+	
+		//minY=(yP+sin(theta))*k
+		int k=(minY-yP)/yD;
+		xP=(xP+xD*k);
+		yP=minY;
+		int intX=round(xP);
+		int intY=round(yP);
+		direcion=(yP<maxY&&yD>0)||(yP>maxY&&yD<0)?1:-1;   // direcion del vector
+		while((intY>=minY&&intY<maxY)){ 
+			if((intX>=0&&intX<bgrMap.cols)){
+				int valueY=intY-minY;
+				votos.at<Vec3b>(yP,xP)=Vec3b(0,255,0);
+				values[intX][valueY]=values[intX][valueY]+1;  //Vota al pixel
+				if(values[intX][valueY]>max){    //Pixel mas votado?
+					max=values[intX][valueY];
+					maxIX=intX;
+					maxIY=intY;
+				}
+			}
+			xP=xP+direcion*xD;    //avanza
+			yP=yP+direcion*yD;
+			intX=round(xP);
+			intY=round(yP);
+		}
+	}
+    }
+    //Dibuja la cruz
+    for(int i=0;i<bgrMap.rows;i++){
+    	fuga.at<Vec3b>(i,maxIX)[0]=0;
+	fuga.at<Vec3b>(i,maxIX)[1]=255;
+	fuga.at<Vec3b>(i,maxIX)[2]=0;	
+    }
+    for(int i=0;i<bgrMap.cols;i++){
+    	fuga.at<Vec3b>(maxIY,i)[0]=0;
+	fuga.at<Vec3b>(maxIY,i)[1]=255;
+	fuga.at<Vec3b>(maxIY,i)[2]=0;	
+    }
+
+    imshow("Punto central", votos);
+    imshow("Punto central max", fuga);
     //////////////////////////////////////////////////
 
 
@@ -193,3 +279,5 @@ int main(int argc, char *argv[]) {
     while(key!=27){key=waitKey(0);}
     return 0;
 } 
+
+
