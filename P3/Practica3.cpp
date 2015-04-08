@@ -8,8 +8,6 @@
 #include "opencv2/imgproc/imgproc_c.h"
 #include "opencv2/imgproc/imgproc.hpp"
 #include <stdio.h>
-#include "fileSystem.h"
-#include "objectFunctions.h"
 
 using namespace cv;
 using namespace std;
@@ -17,12 +15,55 @@ using namespace std;
 int scale = 1;
 int delta = 0;
 int ddepth = CV_32F;
-int UMBRAL = 100;
+int UMBRAL = 50;
 float MARGEN=0.3;
+
+
+void getLines(vector<Vec2f> in,Mat grad,Mat dir,float diff, int r){
+	float angA=(CV_PI/r);
+	int maxX=max(grad.rows,grad.cols);
+        int values[r][r];  //tabla de votos
+	for(int i=0;i<r;i++){
+        	for(int o=0;o<r;o++){
+    			values[i][o]=0;
+		}
+    	}
+	for(int i=0;i<grad.cols;i++){
+    	    for(int o=0;o<grad.rows;o++){
+    		int xP=i;		 //Posicion inicial en el eje X
+		int yP=o;            //Posicion inicial en el eje Y
+
+    		if((int)grad.at<uchar>(yP,xP)>UMBRAL){
+    			//cout<<xP<<" - "<<yP<<" : "<<(int)grad.at<uchar>(yP,xP)<<endl;
+    			float angle=dir.at<float>(yP,xP);
+			//cout<<xP<<" - "<<yP<<" : "<<angle<<endl;
+			for(float ang=angle-diff;ang<angle+diff;ang+=angA){
+				float xD=sin(ang);   //Modulo de la direcion en el eje X
+				float yD=cos(ang);   //Modulo de la direcion en el eje Y
+				//xP*yD+yP*yD-p=0
+				float p=xP*xD+yP+yD;
+				//cout<<ang<<"/"<<CV_PI*2<<" -! "<<p++maxX/2<<"/"<<maxX<<endl;
+				int intp=round((p+maxX/2)*r/(maxX));
+				int inta=round((ang)*r/(CV_PI*2	));
+				cout<<intp<<"/"<<r<<" -> "<<inta<<"/"<<r<<" : "<<values[intp][inta]<<endl;
+				values[intp][inta]=values[intp][inta]+1;
+				//if(p<0){cout<<xD<<","<<yD<<" -> "<<p<<"/"<<r<<" : "<<values[intp][inta]<<endl;}
+				if(values[intp][inta]==3){
+					//cout<<(intp/r)*CV_PI*2-CV_PI<<","<<inta*r-maxX/2<<" : "<<values[intp][inta]<<endl;
+					in.push_back(Vec2f((intp/r)*CV_PI*2,inta/r-maxX/2));
+				}
+			}
+			
+    		}
+	}
+    }
+}
+
 /*
  * Main principal
  */
 int main(int argc, char *argv[]) {
+    char key=0;
     string image;
     if (argc == 1) {
         cout << "Introduza la ruta de la imagen;" << endl; 
@@ -31,17 +72,33 @@ int main(int argc, char *argv[]) {
         image = argv[1];
     }
 
-    Mat bgrMap = imread(image, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
-    if (bgrMap.empty()) {
-        cerr << "Could not open file " << image << endl;
+    Mat bgrMap,captura = imread(image, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
+
+
+   VideoCapture TheVideoCapturer(image.c_str());
+    if (captura.empty()&&!TheVideoCapturer.isOpened()) 
+        {
+		TheVideoCapturer.open(atoi(image.c_str())); //Abre la videocamara
+	}
+   if (!TheVideoCapturer.isOpened()&&captura.empty()) {
+ 	std::cerr << "Could not open file " << image << std::endl;
         return -1;
     }
-
+    if (!captura.empty()){
+    	bgrMap=captura;
+    }else{
+    	TheVideoCapturer >> bgrMap;
+    }
 
 
     namedWindow("Original image", CV_WINDOW_AUTOSIZE);
     namedWindow("Gx", CV_WINDOW_AUTOSIZE);
     namedWindow("Magnitud del Gradiente", CV_WINDOW_AUTOSIZE);
+
+    while (key != 27 && (!captura.empty() || TheVideoCapturer.grab())) {
+        if(captura.empty()){ //Se esta usando una camara
+        	TheVideoCapturer >> bgrMap;
+        } 
     imshow("Original image", bgrMap);
 
 
@@ -49,9 +106,6 @@ int main(int argc, char *argv[]) {
 
     Mat grey;
     cvtColor(bgrMap, grey, CV_BGR2GRAY);
-    grey.at<uchar>(4,4)=0;
-    grey.at<uchar>(5,5)=255;
-    grey.at<uchar>(6,6)=0;
     //Gradiente X/////////////////////////////////////
     Mat sobelx;
     Sobel(grey, sobelx, ddepth, 1, 0, 3, scale, delta, BORDER_DEFAULT);
@@ -98,8 +152,8 @@ int main(int argc, char *argv[]) {
     Mat dirS=Mat::zeros(grey.size(),grey.type());
     float value;
 
-    for(int i=0;i<bgrMap.cols;i++){
-    	for(int o=0;o<bgrMap.rows;o++){
+    for(int i=0;i<grey.rows;i++){
+    	for(int o=0;o<grey.cols;o++){
 		value=M_PI-atan2(-sobely.at<float>(i,o),-sobelx.at<float>(i,o));
 		value=value<0?0:value;  //Solucion para valores negativos muy pequeños
 		dir.at<float>(i,o)=value;
@@ -188,16 +242,15 @@ int main(int argc, char *argv[]) {
 
     imshow("Punto central", votos);
     imshow("Punto central max", fuga);
-
     */
-
+   
+ 
     /*
      * Metodo de Hough 
      */
     Mat dst;
     Mat votos=bgrMap.clone();
     Mat fuga=bgrMap.clone();
-    Vec3b color=Vec3b(255,0,0);
     float angle,xD,yD,xP,yP;
     int mean=round(grey.rows/2); //Horizonte 
     int minY=round(mean-(grey.rows/2)*MARGEN);  //
@@ -217,7 +270,7 @@ int main(int argc, char *argv[]) {
 
     vector<Vec2f> lines;
     HoughLines(dst, lines, 1, CV_PI/180, UMBRAL, 0, 0 );
-
+    //getLines(lines, grad,dir,CV_PI/180, 1000);
      for( size_t i = 0; i < lines.size(); i++ )
      {
      	float rho = lines[i][0], theta = lines[i][1];
@@ -230,7 +283,7 @@ int main(int argc, char *argv[]) {
 	    	pt1.y = cvRound(yP + 1000*(yD));
 	     	pt2.x = cvRound(xP - 1000*(xD));
      		pt2.y = cvRound(yP - 1000*(yD));
-     		line( votos, pt1, pt2, color, 1, CV_AA);
+     		line( votos, pt1, pt2, Scalar(255,0,0), 1, CV_AA);
 
 	
 		//minY=(yP+sin(theta))*k
@@ -273,11 +326,10 @@ int main(int argc, char *argv[]) {
     imshow("Punto central", votos);
     imshow("Punto central max", fuga);
     //////////////////////////////////////////////////
+    if(!captura.empty()){while(key != 27 ){key = waitKey(20);}return 0;}
+        key = waitKey(20);
+}
 
-
-    char key=0;
-    while(key!=27){key=waitKey(0);}
     return 0;
 } 
-
 
