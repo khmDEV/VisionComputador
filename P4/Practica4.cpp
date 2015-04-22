@@ -9,79 +9,197 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/nonfree/nonfree.hpp"
 #include <stdio.h>
+#include "opencv2/calib3d/calib3d.hpp"
 
 using namespace cv;
 using namespace std;
 
 int MIN_MATCHES=10;
 int WINDOWS_TYPE=CV_WINDOW_NORMAL;
+int GOOD_DISTANCE=50;
+int MIN_KEYPOINTS=8;
+Mat img_matches;
+
+
+/*
+ * Calcula las coordenadas resultantes de un punto
+ * al aplicarle una Homografia
+ */
+pair<double,double> calculateCoor(Mat H,int x,int y){
+	pair<double,double> p;
+	double xC=H.at<double>(0,0)*x + H.at<double>(0,1)*y + H.at<double>(0,2);
+	double yC=H.at<double>(1,0)*x + H.at<double>(1,1)*y + H.at<double>(1,2);
+	double zC=H.at<double>(2,0)*x + H.at<double>(2,1)*y + H.at<double>(2,2);
+	p.first=round(xC/zC);
+	p.second=round(yC/zC);
+	return p;
+}
+
+/*
+ * Calcula el offset necesario para que la imagen no tenga pixeles 
+ * en coordenadas negativas y si alguno de los valores sea atipico 
+ * devuelve este 
+ */
+pair<int,int> calculateOffset(Mat H,Mat img){
+
+	pair<double,double> A=calculateCoor(H,0,0);
+	pair<double,double> B=calculateCoor(H,0,img.rows);
+	pair<double,double> C=calculateCoor(H,img.cols,0);
+	pair<double,double> D=calculateCoor(H,img.cols,img.rows);
+
+	double minX=min(min(A.first,B.first),min(C.first,D.first));
+	double minY=min(min(A.second,B.second),min(C.second,D.second));
+
+	pair<double,double> p;
+	p.first=minX<0?abs(minX):0;
+	p.second=minY<0?abs(minY):0;
+
+	return p;
+}
+
+/*
+ * Aplica un offset a una homografia
+ */
+void applyOffset(Mat m,double x,double y){
+	Mat f = Mat::eye(3,3,m.type());
+	f.at<double>(0,2)=x;
+	f.at<double>(1,2)=y;
+	Mat R=f*m;
+	R.copyTo(m);
+	R.release();
+	f.release();
+}
+
+/*
+ * Recorta el fondo negro de una imagen
+ */
+void crop(Mat &in){
+    vector<cv::Point> nonBlackList;
+    nonBlackList.reserve(in.rows*in.cols);
+
+    for(int j=0; j<in.rows; ++j){
+ 	for(int i=0; i<in.cols; ++i){
+      		if(in.at<cv::Vec3b>(j,i) != Vec3b(0,0,0)){
+       			nonBlackList.push_back(cv::Point(i,j));
+       		}
+  	}
+    }
+    Rect bb = cv::boundingRect(nonBlackList);
+    Mat crop=in(bb);
+    crop.copyTo(in);
+    crop.release();
+}
+
 Mat mount(Mat original,Mat next){
-    // detecting keypoints
-    SurfFeatureDetector detector(400);
-    std::vector<KeyPoint> keypoints1, keypoints2;
-    detector.detect(original, keypoints1);
-    detector.detect(next, keypoints2);
+    Mat originalG,nextG;
 
-    // computing descriptors
-    SurfDescriptorExtractor extractor;
+    /*
+     * Tranformamos las imagenes a grises
+     */
+    cvtColor(original, originalG, CV_BGR2GRAY);	
+    cvtColor(next, nextG, CV_BGR2GRAY);	
+
+    /*
+     * Detecion de keypoints
+     */
+    //SurfFeatureDetector detector(400);
+    //OrbFeatureDetector detector;
+    SiftFeatureDetector detector;
+
+    vector<KeyPoint> keypoints1, keypoints2;
+    detector.detect(originalG, keypoints1);
+    detector.detect(nextG, keypoints2);
+
+    if(keypoints2.size()<MIN_KEYPOINTS){
+    	cout<<"La imagen original no tiene suficientes keypoints"<<endl;
+	originalG.release();nextG.release();//liberamos los mat
+	return original;
+    }else if(keypoints1.size()<MIN_KEYPOINTS){
+    	cout<<"La imagen comparada no tiene suficientes keypoints"<<endl;
+	originalG.release();nextG.release();//liberamos los mat
+	return next;
+    }
+    /*
+     * Extractor de descriptores
+     */    
+    //SurfDescriptorExtractor extractor;
+    //OrbDescriptorExtractor extractor;
+    SiftDescriptorExtractor extractor;
+
     Mat descriptors1, descriptors2;
-    extractor.compute(original, keypoints1, descriptors1);
-    extractor.compute(next, keypoints2, descriptors2);
+    extractor.compute(originalG, keypoints1, descriptors1);
+    extractor.compute(nextG, keypoints2, descriptors2);
+    originalG.release();nextG.release();//liberamos los mat
 
-    // matching descriptors
-    BFMatcher matcher(NORM_L2);
+    /*
+     * Matching de keypoints
+     */
+    //BFMatcher matcher(NORM_L2);
+    FlannBasedMatcher matcher;
+
     vector<DMatch> matches;
     matcher.match(descriptors1, descriptors2, matches);
-    
-    // drawing the results
-    namedWindow("matches", 1);
-    Mat img_matches;
-    drawMatches(original, keypoints1, next, keypoints2, matches, img_matches);
-    imshow("matches", img_matches);
-     imwrite("_M.png", img_matches);
-    if((int)matches.size()>=MIN_MATCHES){
-    	int a=matches.at(0).imgIdx;
-	int b=matches.at(0).trainIdx;
-	int min=matches.at(0).distance;
-	for(int i=0;i<matches.size();i++){
-	    if(min>matches.at(i).distance){
-		a=matches.at(i).imgIdx;
-		b=matches.at(i).trainIdx;
-		min=matches.at(i).distance;
-            }
+    descriptors1.release();descriptors2.release();//liberamos los mat
+
+
+    /*
+     * Calculo de matches buenos
+     */
+    vector< DMatch > good_matches;
+    for( int i = 0; i < matches.size(); i++ ){ 
+	if( matches[i].distance < GOOD_DISTANCE ){ 
+		good_matches.push_back( matches[i]); 
 	}
-	int xA=keypoints1.at(a).pt.x;
-	int yA=keypoints1.at(a).pt.y;
-	int xB=keypoints2.at(b).pt.x;
-	int yB=keypoints2.at(b).pt.y;
-
-//circle(original,Point(xA,yA),1,Scalar(255,0,0),20);
-//circle(next,Point(xB,yB),1,Scalar(255,0,0),20);
-
-	int topMargin=yB-yA;topMargin=topMargin<0?0:topMargin;
-	int bottonMargin=(next.rows-yB)-(original.rows-yA);bottonMargin=bottonMargin<0?0:bottonMargin;
-	int leftMargin=xB-xA;leftMargin=leftMargin<0?0:leftMargin;
-	int rigthMargin=(next.cols-xB)-(original.cols-xA);rigthMargin=rigthMargin<0?0:rigthMargin;
-	
-
-	Mat nueva(original.rows+topMargin+bottonMargin,original.cols+leftMargin+rigthMargin, original.type(), Scalar(255,0,0));
-
-	Mat subImg(nueva, Rect(leftMargin>0?0:rigthMargin, topMargin>0?0:bottonMargin, next.cols, next.rows));
-
-	//nueva.colRange(leftMargin>=0?1:next.cols-rigthMargin, nueva.cols-1).rowRange(topMargin>=0?1:next.rows-bottonMargin, nueva.rows-1);
-	//nueva(Range(topMargin>=0?1:next.rows-bottonMargin, nueva.rows-1),Range(leftMargin>=0?1:next.cols-rigthMargin, nueva.cols-1));
-	next.copyTo(subImg);	
-
-	Mat subImg2(nueva, Rect(leftMargin, topMargin, original.cols, original.rows));
-
-	//nueva.colRange(leftMargin==0?1:leftMargin, nueva.cols-1).rowRange(topMargin==0?1:topMargin, nueva.rows-1);
-	//nueva(Range(topMargin==0?1:topMargin, nueva.rows-1),Range(leftMargin==0?1:leftMargin, nueva.cols-1));
-	original.copyTo(subImg2);	
-    	
-	imshow("Nueva", nueva);
-	return nueva;
     }
-    return original;
+
+    if(good_matches.size()<MIN_KEYPOINTS){
+	cout<<"No se han encontrado suficiente matches buenos"<<endl;
+    	drawMatches(original, keypoints1, next, keypoints2, matches, img_matches);
+	if(original.rows==next.rows&&original.cols==next.cols){	
+		cout<<"Se seguira utilizando la imagen comparada"<<endl;
+		return next;
+	}
+	cout<<"Se seguira utilizando la imagen original"<<endl;
+	return original;
+    }
+	
+    vector< Point2f > obj;
+    vector< Point2f > scene;
+    for( int i = 0; i < good_matches.size(); i++ ){
+	obj.push_back( keypoints1[ good_matches[i].queryIdx ].pt );
+	scene.push_back( keypoints2[ good_matches[i].trainIdx ].pt );
+    }
+
+    drawMatches(original, keypoints1, next, keypoints2, good_matches, img_matches);
+
+    /*
+     * Calcula la homografia
+     */
+    Mat H = findHomography(obj , scene, CV_RANSAC ); 
+    if(H.at<double>(1,0)>0.25||H.at<double>(1,0)<-0.25||H.at<double>(0,0)<0.75||H.at<double>(0,0)>1.25){
+	cout<<"Imagen descartada: Homografia atipica"<<endl;
+	return original;
+    }
+
+    /*
+     * Fix offset
+     */
+    pair<double,double> off=calculateOffset(H,original);
+    applyOffset(H,off.first,off.second);
+
+    /*
+     * Obtiene imagen final
+     */
+    Mat nueva(next.rows+next.rows+off.first,original.cols+next.cols+off.second, original.type(), Scalar(0,0,0));
+    warpPerspective(original,nueva,H,nueva.size());
+    Mat half(nueva,cv::Rect(off.first,off.second
+				,next.cols,next.rows));
+    next.copyTo(half);
+
+    crop(nueva);  //Recorta imagen
+    half.release();
+    H.release();
+    return nueva;
 }
 
 
@@ -92,15 +210,25 @@ int main(int argc, char *argv[]) {
     char key=0;
     string image;
     int i=1;
+    bool notStop=false;
     VideoCapture TheVideoCapturer;
-    Mat bgrMap,captura,nueva,anterior;
+    Mat captura,nueva,anterior;
     namedWindow("Original", WINDOWS_TYPE);
     namedWindow("Comparacion", WINDOWS_TYPE);
     namedWindow("matches", WINDOWS_TYPE);
     namedWindow("Nueva", WINDOWS_TYPE);
-    while (key != 27){
+    namedWindow("matches", WINDOWS_TYPE);
+    do {
     	if(!TheVideoCapturer.isOpened()){
    		if (argc <= i) {
+   			cout<<"////////////////////////////////////////"<<endl;
+			cout<<"Pulsa esc para salir"<<endl;
+			cout<<"Pulsa otra tecla cualquiera para contcinuar"<<endl;
+			cout<<"////////////////////////////////////////"<<endl;
+			key=waitKey(0);
+			if(key == 27){
+				return 0;
+			}
         		cout << "Introduza la ruta de la imagen;" << endl; 
         		cin>> image;
     		} else {
@@ -118,42 +246,46 @@ int main(int argc, char *argv[]) {
  		std::cerr << "Could not open file " << image << std::endl;
         	return -1;
     	}
-    	if (!captura.empty()){
-    		bgrMap=captura;
-    	}else{
-    		TheVideoCapturer >> bgrMap;
+    	if (captura.empty()){
+    		TheVideoCapturer >> captura;
     	}
-
-
     	
 	if(!anterior.empty()){
-		nueva=mount(bgrMap,anterior);
-    		imshow("Comparacion", anterior);
-	}else{
-		nueva=bgrMap;
-	}
-    	imshow("Original", bgrMap);
-	if(captura.empty()){ //Se esta usando una camara
-            TheVideoCapturer >> bgrMap;
-    	} 
-
-	cout<<"Pulsa una tecla para continuar"<<endl;
-	key=waitKey(0);
-
-    	if(key==32){
-     		imwrite("_F.png", bgrMap);
-		if(!anterior.empty()){
-	    		imwrite("_C.png", anterior);
+		nueva=mount(anterior,captura);
+    		imshow("Original", anterior);
+    	        imshow("Nueva", nueva);
+		if(!img_matches.empty()){
+   			imshow("matches", img_matches);
 		}
-     		imwrite("_N.png", nueva);
+    		imshow("Comparacion", captura);
+	}else{
+		nueva=captura;
+    		imshow("Original", captura);
 	}
 
-	anterior=nueva.clone();	
+	if(!notStop){
+		cout<<"////////////////////////////////////////"<<endl;
+		cout<<"Pulsa esc para salir"<<endl;
+		cout<<"Pulsa espacio para guardar las capturas"<<endl;
+		cout<<"Pulsa enter para obtener imagenes automaticamente"<<endl;
+		cout<<"Pulsa otra tecla cualquiera para contcinuar"<<endl;
+		cout<<"////////////////////////////////////////"<<endl;
+		key=waitKey(0);
+		if(key==10){
+			notStop=true;
+		}
+    		if(key==32){
+     			imwrite("_F.png", captura);
+	    		imwrite("_C.png", anterior);
+     			imwrite("_N.png", nueva);
+    			imwrite("_M.png", img_matches);
+		}
+	}else{
+		key=waitKey(1);
+	}
+	anterior=nueva;	
 	i++;
-
-
-   }
-
-    return 0;
+   }while(key != 27);
+   return 0;
 } 
 
