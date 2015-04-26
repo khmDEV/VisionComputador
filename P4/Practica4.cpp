@@ -3,21 +3,30 @@
  *          Cristian Roman (646564)
  */
 #include <iostream>
+#include <sstream>
+#include <time.h>
+#include <stdio.h>
+#include <fstream>
+
 #include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include "opencv2/imgproc/imgproc_c.h"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/nonfree/nonfree.hpp"
-#include <stdio.h>
 #include "opencv2/calib3d/calib3d.hpp"
+
+#include "settings.cpp"
 
 using namespace cv;
 using namespace std;
 
 int MIN_MATCHES=10;
 int WINDOWS_TYPE=CV_WINDOW_NORMAL;
-int GOOD_DISTANCE=50;
+int GOOD_DISTANCE=90;
 int MIN_KEYPOINTS=8;
+string CALIBRATION_FILE="calibration.yml";
 Mat img_matches;
 
 
@@ -176,11 +185,11 @@ Mat mount(Mat original,Mat next){
      * Calcula la homografia
      */
     Mat H = findHomography(obj , scene, CV_RANSAC ); 
-    if(H.at<double>(1,0)>0.25||H.at<double>(1,0)<-0.25||H.at<double>(0,0)<0.75||H.at<double>(0,0)>1.25){
+/*    if(H.at<double>(1,0)>0.25||H.at<double>(1,0)<-0.25||H.at<double>(0,0)<0.75||H.at<double>(0,0)>1.25){
 	cout<<"Imagen descartada: Homografia atipica"<<endl;
 	return original;
     }
-
+*/
     /*
      * Fix offset
      */
@@ -210,6 +219,8 @@ int main(int argc, char *argv[]) {
     char key=0;
     string image;
     int i=1;
+    int DELAY=500;
+    clock_t prevTimestamp = 0;
     bool notStop=false;
     VideoCapture TheVideoCapturer;
     Mat captura,nueva,anterior;
@@ -218,6 +229,37 @@ int main(int argc, char *argv[]) {
     namedWindow("matches", WINDOWS_TYPE);
     namedWindow("Nueva", WINDOWS_TYPE);
     namedWindow("matches", WINDOWS_TYPE);
+
+    /*
+     * Carga datos de calibracion
+     */
+    bool calibrate=false;
+    Mat map1,map2;
+
+
+    fstream file(CALIBRATION_FILE.c_str());
+
+
+    if(file.good()){
+    	cout<<"La camara esta calibrada"<<endl;
+
+    	Mat cameraMatrix, distCoeffs;
+    	Size imageSize;
+
+	calibrate=true;
+        FileStorage fs(CALIBRATION_FILE.c_str(), FileStorage::READ);
+	fs["Camera_Matrix"]>>cameraMatrix;
+	fs["Distortion_Coefficients"]>>distCoeffs;
+	initUndistortRectifyMap(cameraMatrix, distCoeffs, Mat(),
+            getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0),
+            imageSize, CV_16SC2, map1, map2);
+
+        fs.release();
+	cameraMatrix.release();
+	distCoeffs.release();
+    }
+
+    file.close();
     do {
     	if(!TheVideoCapturer.isOpened()){
    		if (argc <= i) {
@@ -235,7 +277,7 @@ int main(int argc, char *argv[]) {
         		image = argv[i];
     		}
 	}
-
+    	captura.release();
     	captura = imread(image, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
 
     	if (captura.empty()&&!TheVideoCapturer.isOpened()) 
@@ -247,10 +289,15 @@ int main(int argc, char *argv[]) {
         	return -1;
     	}
     	if (captura.empty()){
+    		captura.release();
     		TheVideoCapturer >> captura;
     	}
-    	
+    	if(calibrate){
+    		//remap(captura, captura, map1, map2, INTER_LINEAR);
+    	}
 	if(!anterior.empty()){
+		
+		nueva.release();
 		nueva=mount(anterior,captura);
     		imshow("Original", anterior);
     	        imshow("Nueva", nueva);
@@ -274,15 +321,16 @@ int main(int argc, char *argv[]) {
 		if(key==10){
 			notStop=true;
 		}
-    		if(key==32){
-     			imwrite("_F.png", captura);
-	    		imwrite("_C.png", anterior);
-     			imwrite("_N.png", nueva);
-    			imwrite("_M.png", img_matches);
-		}
 	}else{
 		key=waitKey(1);
 	}
+	if(key==32){
+     		imwrite("_F.png", captura);
+		imwrite("_C.png", anterior);
+     		imwrite("_N.png", nueva);
+    		imwrite("_M.png", img_matches);
+	}
+	anterior.release();
 	anterior=nueva;	
 	i++;
    }while(key != 27);
