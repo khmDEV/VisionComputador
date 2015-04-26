@@ -162,11 +162,16 @@ Mat mount(Mat original, Mat next) {
     /*
      * Matching de keypoints
      */
-    //BFMatcher matcher(NORM_L2);
-    FlannBasedMatcher matcher;
-
     vector<DMatch> matches;
-    matcher.match(descriptors1, descriptors2, matches);
+    if(metodoP != 2){
+    	FlannBasedMatcher matcher;
+   	matcher.match(descriptors1, descriptors2, matches);
+    }else{
+	BFMatcher matcher(NORM_L2); 
+   	matcher.match(descriptors1, descriptors2, matches);   	
+    }
+
+
 
     /*
      * Calculo de distancia optima
@@ -221,11 +226,10 @@ Mat mount(Mat original, Mat next) {
      */
     //    findHomography( Mat(points1), Mat(points2), CV_RANSAC, ransacReprojThreshold );
     Mat H = findHomography(obj, scene, CV_RANSAC);
-    /*    if(H.at<double>(1,0)>0.25||H.at<double>(1,0)<-0.25||H.at<double>(0,0)<0.75||H.at<double>(0,0)>1.25){
-            cout<<"Imagen descartada: Homografia atipica"<<endl;
-            return original;
-        }
-     */
+    if(H.at<double>(1,0)>0.25||H.at<double>(1,0)<-0.25||H.at<double>(0,0)<0.75||H.at<double>(0,0)>1.25){
+        cout<<"Imagen descartada: Homografia atipica"<<endl;
+        return original;
+    }
 
     /*
      * Representacion emparejamiento de puntos
@@ -371,6 +375,7 @@ int main(int argc, char *argv[]) {
             cout << "Pulsa esc para salir" << endl;
             cout << "Pulsa espacio para guardar las capturas" << endl;
             cout << "Pulsa enter para obtener imagenes automaticamente" << endl;
+            cout << "Pulsa m para cambiar el modo" << endl;
             cout << "Pulsa otra tecla cualquiera para contcinuar" << endl;
             cout << "////////////////////////////////////////" << endl;
             key = waitKey(0);
@@ -380,6 +385,10 @@ int main(int argc, char *argv[]) {
         } else {
             key = waitKey(1);
         }
+        if (key == 109) {
+        	metodoP=metodoP==2?0:metodoP+1;	
+            	cout << "Metodo"<< metodoP << endl;
+	}
         if (key == 32) {
             imwrite("_F.png", captura);
             imwrite("_C.png", anterior);
