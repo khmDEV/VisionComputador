@@ -110,9 +110,6 @@ Mat mount(Mat original, Mat next) {
     /*
      * Detecion de keypoints
      */
-    //SurfFeatureDetector detector(400);
-    //OrbFeatureDetector detector;
-    SiftFeatureDetector detector;
 
     vector<KeyPoint> keypoints1, keypoints2;
     if (metodoP == 0) {
