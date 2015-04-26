@@ -3,21 +3,36 @@
  *          Cristian Roman (646564)
  */
 #include <iostream>
+#include <sstream>
+#include <time.h>
+#include <stdio.h>
+#include <fstream>
+
 #include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include "opencv2/imgproc/imgproc_c.h"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/nonfree/nonfree.hpp"
-#include <stdio.h>
 #include "opencv2/calib3d/calib3d.hpp"
+
 
 using namespace cv;
 using namespace std;
 
+<<<<<<< HEAD
 int MIN_MATCHES = 10;
 int WINDOWS_TYPE = CV_WINDOW_NORMAL;
 double GOOD_DISTANCE = 0.02;
 int MIN_KEYPOINTS = 8;
+=======
+int MIN_MATCHES=10;
+int WINDOWS_TYPE=CV_WINDOW_NORMAL;
+int GOOD_DISTANCE=90;
+int MIN_KEYPOINTS=8;
+string CALIBRATION_FILE="calibration.yml";
+>>>>>>> 68f0b2dfa76e8b2ffc249c9c2c64ac97c1e50f97
 Mat img_matches;
 int metodoP = 0;
 
@@ -215,6 +230,7 @@ Mat mount(Mat original, Mat next) {
     /*
      * Calcula la homografia
      */
+<<<<<<< HEAD
     //    findHomography( Mat(points1), Mat(points2), CV_RANSAC, ransacReprojThreshold );
     Mat H = findHomography(obj, scene, CV_RANSAC);
 
@@ -242,6 +258,14 @@ Mat mount(Mat original, Mat next) {
     line(img_matches, scene_corners[3] + Point2f(original.cols, 0), scene_corners[0] + Point2f(original.cols, 0), Scalar(0, 255, 0), 4);
 
 
+=======
+    Mat H = findHomography(obj , scene, CV_RANSAC ); 
+/*    if(H.at<double>(1,0)>0.25||H.at<double>(1,0)<-0.25||H.at<double>(0,0)<0.75||H.at<double>(0,0)>1.25){
+	cout<<"Imagen descartada: Homografia atipica"<<endl;
+	return original;
+    }
+*/
+>>>>>>> 68f0b2dfa76e8b2ffc249c9c2c64ac97c1e50f97
     /*
      * Fix offset
      */
@@ -271,8 +295,15 @@ Mat mount(Mat original, Mat next) {
 int main(int argc, char *argv[]) {
     char key = 0;
     string image;
+<<<<<<< HEAD
     int i = 1;
     bool notStop = false;
+=======
+    int i=1;
+    int DELAY=500;
+    clock_t prevTimestamp = 0;
+    bool notStop=false;
+>>>>>>> 68f0b2dfa76e8b2ffc249c9c2c64ac97c1e50f97
     VideoCapture TheVideoCapturer;
     Mat captura, nueva, anterior;
     namedWindow("Original", WINDOWS_TYPE);
@@ -280,7 +311,39 @@ int main(int argc, char *argv[]) {
     namedWindow("matches", WINDOWS_TYPE);
     namedWindow("Nueva", WINDOWS_TYPE);
     namedWindow("matches", WINDOWS_TYPE);
+
+    /*
+     * Carga datos de calibracion
+     */
+    bool calibrate=false;
+    Mat map1,map2;
+
+
+    fstream file(CALIBRATION_FILE.c_str());
+
+
+    if(file.good()){
+    	cout<<"La camara esta calibrada"<<endl;
+
+    	Mat cameraMatrix, distCoeffs;
+    	Size imageSize;
+
+	calibrate=true;
+        FileStorage fs(CALIBRATION_FILE.c_str(), FileStorage::READ);
+	fs["Camera_Matrix"]>>cameraMatrix;
+	fs["Distortion_Coefficients"]>>distCoeffs;
+	initUndistortRectifyMap(cameraMatrix, distCoeffs, Mat(),
+            getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0),
+            imageSize, CV_16SC2, map1, map2);
+
+        fs.release();
+	cameraMatrix.release();
+	distCoeffs.release();
+    }
+
+    file.close();
     do {
+<<<<<<< HEAD
         if (!TheVideoCapturer.isOpened()) {
             if (argc <= i) {
                 cout << "////////////////////////////////////////" << endl;
@@ -349,4 +412,81 @@ int main(int argc, char *argv[]) {
     } while (key != 27);
     return 0;
 }
+=======
+    	if(!TheVideoCapturer.isOpened()){
+   		if (argc <= i) {
+   			cout<<"////////////////////////////////////////"<<endl;
+			cout<<"Pulsa esc para salir"<<endl;
+			cout<<"Pulsa otra tecla cualquiera para contcinuar"<<endl;
+			cout<<"////////////////////////////////////////"<<endl;
+			key=waitKey(0);
+			if(key == 27){
+				return 0;
+			}
+        		cout << "Introduza la ruta de la imagen;" << endl; 
+        		cin>> image;
+    		} else {
+        		image = argv[i];
+    		}
+	}
+    	captura.release();
+    	captura = imread(image, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
+
+    	if (captura.empty()&&!TheVideoCapturer.isOpened()) 
+        {
+		TheVideoCapturer.open(atoi(image.c_str())); //Abre la videocamara
+	}
+   	if (!TheVideoCapturer.isOpened()&&captura.empty()) {
+ 		std::cerr << "Could not open file " << image << std::endl;
+        	return -1;
+    	}
+    	if (captura.empty()){
+    		captura.release();
+    		TheVideoCapturer >> captura;
+    	}
+    	if(calibrate){
+    		//remap(captura, captura, map1, map2, INTER_LINEAR);
+    	}
+	if(!anterior.empty()){
+		
+		nueva.release();
+		nueva=mount(anterior,captura);
+    		imshow("Original", anterior);
+    	        imshow("Nueva", nueva);
+		if(!img_matches.empty()){
+   			imshow("matches", img_matches);
+		}
+    		imshow("Comparacion", captura);
+	}else{
+		nueva=captura;
+    		imshow("Original", captura);
+	}
+
+	if(!notStop){
+		cout<<"////////////////////////////////////////"<<endl;
+		cout<<"Pulsa esc para salir"<<endl;
+		cout<<"Pulsa espacio para guardar las capturas"<<endl;
+		cout<<"Pulsa enter para obtener imagenes automaticamente"<<endl;
+		cout<<"Pulsa otra tecla cualquiera para contcinuar"<<endl;
+		cout<<"////////////////////////////////////////"<<endl;
+		key=waitKey(0);
+		if(key==10){
+			notStop=true;
+		}
+	}else{
+		key=waitKey(1);
+	}
+	if(key==32){
+     		imwrite("_F.png", captura);
+		imwrite("_C.png", anterior);
+     		imwrite("_N.png", nueva);
+    		imwrite("_M.png", img_matches);
+	}
+	anterior.release();
+	anterior=nueva;	
+	i++;
+   }while(key != 27);
+   return 0;
+} 
+>>>>>>> 68f0b2dfa76e8b2ffc249c9c2c64ac97c1e50f97
 
