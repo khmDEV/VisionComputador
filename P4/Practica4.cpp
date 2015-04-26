@@ -17,7 +17,6 @@
 #include "opencv2/nonfree/nonfree.hpp"
 #include "opencv2/calib3d/calib3d.hpp"
 
-#include "settings.cpp"
 
 using namespace cv;
 using namespace std;
