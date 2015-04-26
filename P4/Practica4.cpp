@@ -120,12 +120,15 @@ Mat mount(Mat original, Mat next) {
         SurfFeatureDetector detector(400); //400 = minHessian
         detector.detect(originalG, keypoints1);
         detector.detect(nextG, keypoints2);
-    } else {
+    } else if (metodoP == 2) {
         OrbFeatureDetector detector;
         detector.detect(originalG, keypoints1);
         detector.detect(nextG, keypoints2);
+    } else {
+        FastFeatureDetector detector;
+        detector.detect(originalG, keypoints1);
+        detector.detect(nextG, keypoints2);
     }
-
 
     if (keypoints2.size() < MIN_KEYPOINTS) {
         cout << "La imagen original no tiene suficientes keypoints" << endl;
@@ -151,8 +154,12 @@ Mat mount(Mat original, Mat next) {
         SurfDescriptorExtractor extractor;
         extractor.compute(originalG, keypoints1, descriptors1);
         extractor.compute(nextG, keypoints2, descriptors2);
-    } else {
+    } else if (metodoP == 2) {
         OrbDescriptorExtractor extractor;
+        extractor.compute(originalG, keypoints1, descriptors1);
+        extractor.compute(nextG, keypoints2, descriptors2);
+    } else {
+        SurfDescriptorExtractor extractor;
         extractor.compute(originalG, keypoints1, descriptors1);
         extractor.compute(nextG, keypoints2, descriptors2);
     }
@@ -163,12 +170,12 @@ Mat mount(Mat original, Mat next) {
      * Matching de keypoints
      */
     vector<DMatch> matches;
-    if(metodoP != 2){
-    	FlannBasedMatcher matcher;
-   	matcher.match(descriptors1, descriptors2, matches);
-    }else{
-	BFMatcher matcher(NORM_L2); 
-   	matcher.match(descriptors1, descriptors2, matches);   	
+    if (metodoP == 0) {
+        FlannBasedMatcher matcher;
+        matcher.match(descriptors1, descriptors2, matches);
+    } else {
+        BFMatcher matcher(NORM_L2);
+        matcher.match(descriptors1, descriptors2, matches);
     }
 
 
@@ -226,8 +233,8 @@ Mat mount(Mat original, Mat next) {
      */
     //    findHomography( Mat(points1), Mat(points2), CV_RANSAC, ransacReprojThreshold );
     Mat H = findHomography(obj, scene, CV_RANSAC);
-    if(H.at<double>(1,0)>0.25||H.at<double>(1,0)<-0.25||H.at<double>(0,0)<0.75||H.at<double>(0,0)>1.25){
-        cout<<"Imagen descartada: Homografia atipica"<<endl;
+    if (H.at<double>(1, 0) > 0.25 || H.at<double>(1, 0)<-0.25 || H.at<double>(0, 0) < 0.75 || H.at<double>(0, 0) > 1.25) {
+        cout << "Imagen descartada: Homografia atipica" << endl;
         return original;
     }
 
@@ -386,9 +393,9 @@ int main(int argc, char *argv[]) {
             key = waitKey(1);
         }
         if (key == 109) {
-        	metodoP=metodoP==2?0:metodoP+1;	
-            	cout << "Metodo"<< metodoP << endl;
-	}
+            metodoP = metodoP == 2 ? 0 : metodoP + 1;
+            cout << "Metodo" << metodoP << endl;
+        }
         if (key == 32) {
             imwrite("_F.png", captura);
             imwrite("_C.png", anterior);
