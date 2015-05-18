@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( Practica4 )
+find_package( OpenCV REQUIRED )
+add_executable( Practica4 Practica4.cpp)
+target_link_libraries( Practica4 ${OpenCV_LIBS} )

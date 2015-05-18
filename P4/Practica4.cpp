@@ -28,7 +28,8 @@ int MIN_KEYPOINTS = 8;
 string CALIBRATION_FILE = "calibration.yml";
 Mat img_matches;
 int metodoP = 0;
-
+int MAX_SIZE=1000;
+int DIV=5;
 /*
 * Calcula las coordenadas resultantes de un punto
 * al aplicarle una Homografia
@@ -452,8 +453,10 @@ Mat mount(Mat original, Mat next) {
   int main(int argc, char *argv[]) {
     char key = 0;
     string image;
+    string num;
     int i = 1;
-    int DELAY = 500;
+    int cap=0;
+    int init,end,mean;
     clock_t prevTimestamp = 0;
     bool notStop = false;
     VideoCapture TheVideoCapturer;
@@ -493,6 +496,28 @@ Mat mount(Mat original, Mat next) {
     }
 
     file.close();
+    cout << "Metodo SIFT"<<endl;
+    cout << "////////////////////////////////////////" << endl;
+    cout << "Pulsa m para cambiar el modo" << endl;
+    cout << "Pulsa otra tecla cualquiera para contcinuar" << endl;
+    cout << "////////////////////////////////////////" << endl;
+    key = waitKey(0);
+    while (key == 109) {
+        metodoP = metodoP == 3 ? 0 : metodoP + 1;
+        
+        cout << "Metodo ";
+	if(metodoP==0){
+		cout << "SIFT";
+	}else if(metodoP==1){
+		cout << "SURF";
+	}else if(metodoP==2){
+		cout << "ORB";
+	}else if(metodoP==3){
+		cout << "FAST";
+	}
+	cout << endl;
+        key = waitKey(0);
+    }
     do {
       if (!TheVideoCapturer.isOpened()) {
         if (argc <= i) {
@@ -512,7 +537,7 @@ Mat mount(Mat original, Mat next) {
       }
       captura.release();
       captura = imread(image, CV_LOAD_IMAGE_COLOR); //Carga la imagen recibida por parametro
-
+	
       if (captura.empty()&&!TheVideoCapturer.isOpened()) {
         TheVideoCapturer.open(atoi(image.c_str())); //Abre la videocamara
       }
@@ -525,10 +550,24 @@ Mat mount(Mat original, Mat next) {
         TheVideoCapturer >> captura;
       }
 
+      if(captura.rows>MAX_SIZE||captura.cols>MAX_SIZE){
+      	Size siz=Size(captura.cols/DIV,captura.rows/DIV);
+	while(siz.height>MAX_SIZE||siz.width>MAX_SIZE){
+		siz=Size(siz.height/DIV,siz.width/DIV);
+	}
+      	Mat aux=captura;
+	resize(aux,captura,siz);
+	aux.release();
+      }
+
       if (!anterior.empty()) {
 
         nueva.release();
+	init=clock();
         nueva = mount(anterior, captura);
+	end=clock();
+	int time=end-init;
+	cout<<"Tiempo "	<<time<< " ms"<<endl;
         imshow("Original", anterior);
         imshow("Nueva", nueva);
         if (!img_matches.empty()) {
@@ -560,10 +599,14 @@ Mat mount(Mat original, Mat next) {
         cout << "Metodo" << metodoP << endl;
       }
       if (key == 32) {
-        imwrite("_F.png", captura);
-        imwrite("_C.png", anterior);
-        imwrite("_N.png", nueva);
-        imwrite("_M.png", img_matches);
+      	stringstream ss;
+      	ss<<cap;
+	ss>>num;
+        imwrite(num+"_F.png", captura);
+        imwrite(num+"_C.png", anterior);
+        imwrite(num+"_N.png", nueva);
+        imwrite(num+"_M.png", img_matches);
+	cap++;
       }
 
       if(key == 104){ //h

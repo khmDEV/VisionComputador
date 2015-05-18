@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( Practica3 )
+find_package( OpenCV REQUIRED )
+add_executable( Practica3 Practica3.cpp objectFunctions.h objectFunctions.cpp fileSystem.h fileSystem.cpp)
+target_link_libraries( Practica3 ${OpenCV_LIBS} )
